@@ -4,11 +4,22 @@ import os
 from src.AnaliseEstoque import AnaliseEstoque  
 
 # ── Configuração do caminho base ───────────────────────────────
-user_profile = os.environ["USERPROFILE"]
-path_base = os.path.join(user_profile, 'Carmel Capital', 'Arquivos - Documentos',
-                         '00 - CARMEL ASSET', '01 - OPERACIONAL', 'TECNOLOGIA', 'BASE_ESTOQUE_ANALISE')
+# 1. Tenta identificar se está no Windows (Seu PC) ou Linux (Streamlit Cloud)
+if "USERPROFILE" in os.environ:
+    user_profile = os.environ["USERPROFILE"]
+    path_base = os.path.join(user_profile, 'Carmel Capital', 'Arquivos - Documentos',
+                             '00 - CARMEL ASSET', '01 - OPERACIONAL', 'TECNOLOGIA', 'BASE_ESTOQUE_ANALISE')
+else:
+    path_base = os.path.join(os.getcwd(), 'BASE_ESTOQUE_ANALISE')
+ 
+if not os.path.exists(path_base):
+    st.error(f"⚠️ Pasta de dados não encontrada: {path_base}")
+    st.info("Se estiver no servidor, certifique-se de que os arquivos foram enviados ao repositório.")
+else:
+    st.success("✅ Conectado à base de dados.")
 
 st.title("📊 Análise de Estoque de Recebíveis")
+
 
 # ── Seleção de arquivo ─────────────────────────────────────────
 if not os.path.exists(path_base):
