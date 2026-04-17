@@ -4,8 +4,6 @@ import os
 import io
 from src.analise_estoque import AnaliseEstoque  
 
- 
-
 st.title("📊 Análise de Estoque de Recebíveis")
 
 # ── Seleção de arquivo por Upload ──────────────────────────────
