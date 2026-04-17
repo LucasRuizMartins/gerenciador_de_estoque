@@ -2,4 +2,9 @@ mkdocs
 pip
 python-dotenv
 ruff
+humanize
+pandas
+numpy
+typing
+dataclasses
 -e .
