@@ -1,37 +1,39 @@
 import streamlit as st
 import pandas as pd
 import os
-from src.AnaliseEstoque import AnaliseEstoque  
+import io
+from src.analise_estoque import AnaliseEstoque  
 
-# ── Configuração do caminho base ───────────────────────────────
-user_profile = os.environ["USERPROFILE"]
-path_base = os.path.join(user_profile, 'Carmel Capital', 'Arquivos - Documentos',
-                         '00 - CARMEL ASSET', '01 - OPERACIONAL', 'TECNOLOGIA', 'BASE_ESTOQUE_ANALISE')
+ 
 
 st.title("📊 Análise de Estoque de Recebíveis")
 
-# ── Seleção de arquivo ─────────────────────────────────────────
-if not os.path.exists(path_base):
-    st.error(f"Diretório não encontrado: {path_base}")
+# ── Seleção de arquivo por Upload ──────────────────────────────
+arquivo_selecionado = st.file_uploader(
+    "Faça o upload do arquivo de estoque", 
+    type=['zip', 'csv', 'xlsx', 'xls'],
+    help="Arraste o arquivo diretamente da sua pasta do SharePoint para cá."
+)
+
+if arquivo_selecionado is not None:
+    st.success(f"Arquivo '{arquivo_selecionado.name}' carregado com sucesso!")
+else:
+    st.info("Por favor, faça o upload de um arquivo para iniciar a análise.")
     st.stop()
 
-arquivos = [f for f in os.listdir(path_base)
-            if os.path.isfile(os.path.join(path_base, f))
-            and f.endswith(('.zip', '.csv', '.xlsx', '.xls'))]
-
-if not arquivos:
-    st.warning("Nenhum arquivo encontrado na pasta.")
-    st.stop()
-
-arquivo_selecionado = st.selectbox("Selecione o arquivo:", arquivos)
-file_path = os.path.join(path_base, arquivo_selecionado)
 
 # ── Processamento ──────────────────────────────────────────────
+# Usamos o arquivo_selecionado diretamente (o objeto de upload)
 if st.button("🚀 Processar"):
     with st.spinner("Processando... Isso pode levar alguns minutos para arquivos grandes."):
-        analise = AnaliseEstoque(file_path)
-        st.session_state["analise"] = analise
-    st.success("✅ Processamento concluído!")
+        try:
+            # Garanta que sua classe AnaliseEstoque aceite o objeto de arquivo no __init__
+            analise = AnaliseEstoque(arquivo_selecionado)
+            st.session_state["analise"] = analise
+            st.success("✅ Processamento concluído!")
+        except Exception as e:
+            st.error(f"Erro ao processar o arquivo: {e}")
+
 
 # ── Exibição das métricas ──────────────────────────────────────
 if "analise" not in st.session_state:
@@ -190,17 +192,23 @@ st.dataframe(df_recebiveis, use_container_width=True, hide_index=True)
 # ── Exportar Excel ─────────────────────────────────────────────
 st.subheader("💾 Exportar")
 from datetime import datetime
+
 data_atual = datetime.now().strftime("%d_%m_%Y")
-pasta_relatorios = "relatorios"
-nome_arquivo = f"relatorio_{arquivo_selecionado.split('.')[0]}_{data_atual}.xlsx"
+nome_base = arquivo_selecionado.name.split('.')[0]
+nome_arquivo = f"relatorio_{nome_base}_{data_atual}.xlsx"
 
+if st.button("📥 Gerar arquivo para download"):
+    with st.spinner("Gerando arquivo..."):
+        try:
+            if "analise" in st.session_state:
+                buffer = io.BytesIO()
+                analise.exportar_para_excel(buffer)
+                buffer.seek(0)
 
-output_path = os.path.join(path_base, pasta_relatorios, nome_arquivo)
-if not os.path.exists(os.path.join(path_base, pasta_relatorios)):
-    os.makedirs(os.path.join(path_base, pasta_relatorios))
-    
-    
-if st.button("📥 Exportar para Excel"):
-    ok = analise.exportar_para_excel(output_path)
-    if ok:
-        st.success(f"Exportado em: {output_path}")
+                st.download_button(
+                    "⬇️ Baixar Excel",
+                    buffer,
+                    file_name=nome_arquivo
+                )
+        except Exception as e:
+            st.error(f"Erro ao gerar arquivo: {e}")

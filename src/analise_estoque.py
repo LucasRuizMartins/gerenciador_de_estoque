@@ -7,7 +7,9 @@ from zipfile import ZipFile
 from typing import Dict, Optional, Iterator
 from dataclasses import dataclass, field
 import gc
-
+import tempfile
+import os
+import io
 from src.metricas import MetricasGlobais  
 from src.metricas import MetricasVencimento 
 from src.metricas import MetricasMensais  
@@ -47,19 +49,34 @@ class AnaliseEstoque:
         'VALOR_PDD': 'float64',
     }
     
-    def __init__(self, path_estoque: str):
-        """Inicializa e processa análise de estoque."""
+ 
+    def __init__(self, arquivo):
+
         self._inicializar_metricas()
         self._inicializar_acumuladores()
         self.data_ref = pd.Timestamp.now().replace(day=1)
-        
+
         try:
-            print(f"Iniciando processamento de {path_estoque}...")
-            self._processar_arquivo_chunks(path_estoque)
+            # 🔥 Normalização: garantir caminho físico
+            if hasattr(arquivo, "read"):  # UploadedFile
+                arquivo.seek(0)
+
+                sufixo = os.path.splitext(arquivo.name)[-1]
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=sufixo) as tmp:
+                    tmp.write(arquivo.read())
+                    caminho = tmp.name
+            else:
+                caminho = arquivo  # já é path
+
+            print(f"Iniciando processamento de {caminho}...")
+            self._processar_arquivo_chunks(caminho)
             self._finalizar_calculos()
             print("Processamento concluído com sucesso!")
+
         except Exception as e:
-            print(f"Erro ao processar arquivo '{path_estoque}': {e}")
+            (f"Erro ao processar arquivo: {e}")
+        
     
     def _inicializar_metricas(self) -> None:
         """Inicializa todas as estruturas de métricas."""
@@ -1178,3 +1195,9 @@ def salvar(path,df):
           print("Nenhum dado para exportar. Carregue um arquivo primeiro.")           
     else:
         print("Nenhum local de salvamento selecionado.")
+        
+        
+    def exportar_para_excel(self, destino):
+        with pd.ExcelWriter(destino, engine="xlsxwriter") as writer:
+            self.df.to_excel(writer, index=False)
+            # outras abas se tiver
