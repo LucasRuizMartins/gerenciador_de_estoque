@@ -18,3 +18,6 @@ COLUNAS_ESTOQUE = list(['NOME_FUNDO',
            'PRAZO_ATUAL',
            'FAIXA_PDD'
           ])
+
+
+MAP_CEDENTE = {'01':'pessoa fisica', '02':'pessoa juridica'}

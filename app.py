@@ -5,21 +5,28 @@ st.set_page_config(layout='wide')
 
 
 
-pagina_dados = st.Page(
-    "pages/pagina_dados.py", 
-    title="Dashboard", 
-    icon="📊"
-)
-
-pagina_dados_processados = st.Page(
-    "pages/pagina_dados_processados.py", 
-    title="Processamento", 
+pagina_estoque = st.Page(
+    "pages/pagina_estoque.py", 
+    title="Processamento Estoque", 
     icon="📊",
         default=True
 )
 
 
-pg = st.navigation([pagina_dados,pagina_dados_processados])
+pagina_liquidados = st.Page(
+    "pages/pagina_liquidados.py", 
+    title="Dashboard Liquidações", 
+    icon="📊"
+)
+
+pagina_leitor_cnab = st.Page(
+    "pages/validador_cnab.py", 
+    title="Validador de cnab", 
+    icon="📊"
+)
+
+
+pg = st.navigation([pagina_estoque,pagina_leitor_cnab])
 
 
 pg.run()

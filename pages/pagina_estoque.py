@@ -2,35 +2,15 @@ import streamlit as st
 import pandas as pd
 import os
 import io
-from src.analise_estoque import AnaliseEstoque  
+from src.classes.analise_estoque import AnaliseEstoque  
+
+from src.components import selector
 
 st.title("📊 Análise de Estoque de Recebíveis")
 
-# ── Seleção de arquivo por Upload ──────────────────────────────
-arquivo_selecionado = st.file_uploader(
-    "Faça o upload do arquivo de estoque", 
-    type=['zip', 'csv', 'xlsx', 'xls'],
-    help="Arraste o arquivo diretamente da sua pasta do SharePoint para cá."
-)
-
-if arquivo_selecionado is not None:
-    st.success(f"Arquivo '{arquivo_selecionado.name}' carregado com sucesso!")
-else:
-    st.info("Por favor, faça o upload de um arquivo para iniciar a análise.")
-    st.stop()
-
-
-# ── Processamento ──────────────────────────────────────────────
-# Usamos o arquivo_selecionado diretamente (o objeto de upload)
-if st.button("🚀 Processar"):
-    with st.spinner("Processando... Isso pode levar alguns minutos para arquivos grandes."):
-        try:
-            # Garanta que sua classe AnaliseEstoque aceite o objeto de arquivo no __init__
-            analise = AnaliseEstoque(arquivo_selecionado)
-            st.session_state["analise"] = analise
-            st.success("✅ Processamento concluído!")
-        except Exception as e:
-            st.error(f"Erro ao processar o arquivo: {e}")
+selector.componente_upload_processamento("Faça o upload do arquivo de estoque",
+                                         AnaliseEstoque,
+                                         'analise')
 
 
 # ── Exibição das métricas ──────────────────────────────────────
@@ -172,8 +152,7 @@ if tipo_sel:
 st.subheader("🏢 Cedentes")
 df_cedentes = analise.obter_cedentes_agrupados()
 df_cedentes['VALOR_PRESENTE'] = df_cedentes['VALOR_PRESENTE'].apply(hmz)
-#df_cedentes['VALOR_PRESENTE'] = df_cedentes['VALOR_PRESENTE'].apply(pct)
-
+ 
 st.dataframe(df_cedentes, use_container_width=True, hide_index=True)
 
 st.subheader("📋 Recebíveis por Tipo")
@@ -192,7 +171,7 @@ st.subheader("💾 Exportar")
 from datetime import datetime
 
 data_atual = datetime.now().strftime("%d_%m_%Y")
-nome_base = arquivo_selecionado.name.split('.')[0]
+nome_base = m.nome_fundo.split()[0] #arquivo_selecionado.name.split('.')[0]
 nome_arquivo = f"relatorio_{nome_base}_{data_atual}.xlsx"
 
 if st.button("📥 Gerar arquivo para download"):
