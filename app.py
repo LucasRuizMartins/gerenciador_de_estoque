@@ -22,7 +22,7 @@ pagina_liquidados = st.Page(
 pagina_leitor_cnab = st.Page(
     "pages/validador_cnab.py", 
     title="Validador de cnab", 
-    icon="📊"
+    icon="📄"
 )
 
 

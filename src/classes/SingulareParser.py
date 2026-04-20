@@ -10,7 +10,7 @@ class SingulareParser(CNABParser):
         return {
             "banco": self.header[79:94].strip(),
             "data_operacao": data_cnab,
-            "banco": self.header[76:79],
+            "numero_banco": self.header[76:79],
             "gestora": self.header[46:76].strip()
         }
 
@@ -23,6 +23,7 @@ class SingulareParser(CNABParser):
                 registro = {
                     'numero_doc': linha[110:120].strip(),
                     'seu_numero': linha[37:62].strip(),
+                    'identificacao_ocorrencia': linha[108:110].strip(),
                     'data_vencimento': linha[120:126].strip(),
                     'valor_nominal': float(linha[126:139]) / 100,
                     'valor_presente': float(linha[192:205]) / 100,

@@ -11,7 +11,7 @@ from src.classes.CnabParserFactory import CNABParserFactory
 import streamlit as st
 from src.classes.CnabParserFactory import CNABParserFactory
 from src.classes.Formater import Formater as fmt
-from src.global_var import MAP_CEDENTE
+from src.global_var import MAP_OCORRENCIA
 
 st.title("📄 Leitor de Arquivo CNAB")
 
@@ -41,7 +41,7 @@ st.subheader("📋 Cabeçalho")
 col1, col2, col3 = st.columns(3)
 
 col1.metric("Banco", header["banco"])
-col2.metric("Nº do Banco", header["banco"])
+col2.metric("Nº do Banco", header["numero_banco"])
 col3.metric("Data da operação", header["data_operacao"].strftime("%d/%m/%Y"))
 
 col1, col2 = st.columns(2)
@@ -54,13 +54,28 @@ with st.expander("Ver header"):
 st.subheader(f"📝 Registros")
 
 # ── KPIs ─────────────────────────────────────
-col1, col2, col3, col4, col5 = st.columns(5)
+st.write("### Identificação de ocorrência")
+
+contagem = df['identificacao_ocorrencia'].value_counts().reset_index()
+contagem.columns = ['Código','Quantidade']
+contagem['Descrição'] = contagem['Código'].map(MAP_OCORRENCIA)
+contagem = contagem[['Código','Descrição','Quantidade']]
+
+
+
+
+col1,col2 = st.columns(2)
+col1.dataframe(contagem, hide_index=True, use_container_width=True)
+
+st.write("### Resumo de Ocorrências no Arquivo")
+col1, col2, col3, col4, col5,col6 = st.columns(6)
 
 col1.metric("Total Títulos", f"{len(df):}")
 col2.metric("Valor Nominal Total", fmt.format_br(df['valor_nominal'].sum()))
 col3.metric("Valor Presente Total", fmt.format_br(df['valor_presente'].sum()))
-col4.metric("Contagem de Cedentes", f"{df['cedente'].nunique():,}")
-col5.metric("Tipo de Cedente", fmt.definir_tipo_cedente(df))
+col4.metric("Contagem de Sacados", f"{df['doc_sacado'].nunique():}")
+col5.metric("Contagem de Cedentes", f"{df['cedente'].nunique():,}")
+col6.metric("Tipo de Cedente", fmt.definir_tipo_cedente(df))
 
 
 # ── Tabela ─────────────────────────────────────
