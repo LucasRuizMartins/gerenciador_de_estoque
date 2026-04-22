@@ -718,30 +718,44 @@ class AnaliseEstoque:
         
         print(f"\nMétricas calculadas para {len(self.metricas_mensais_por_tipo)} tipos de recebível")
     
+    def _mediana_ratio(self,valores, taxas):
+        pares = [(v, t) for v, t in zip(valores, taxas) if t not in (0, None)]
+        if not pares:
+            return None
+        ratios = [v / t for v, t in pares]
+        return statistics.median(ratios)
+    
     def _calcular_metricas_globais_finais(self) -> None:
-        """Calcula métricas finais globais."""
         m = self.metricas_globais
-        
-        # Totais
+
         self.total_sacados = len(self.sacados_acum)
         self.total_cedentes = len(self.cedentes_acum)
-        
-        # Tickets médios
+
         self._calcular_tickets_medios(m)
         self._calcular_tickets_medios_ultima_quinzena(m)
 
-        
         # Medianas
         if self._todas_taxas_media:
             m.mediana_taxa_media = statistics.median(self._todas_taxas_media)
-        if self._todos_valores_aquisicao:
-            m.mediana_valor_aquisicao = statistics.median(self._todos_valores_aquisicao) / statistics.median(self._todas_taxas_cessao_geral)
-        if self._todos_valores_aquisicao_a_vencer:
-            m.mediana_a_vencer = statistics.median(self._todos_valores_aquisicao_a_vencer) / statistics.median(self._todas_taxas_cessao_geral)
-        if self._todos_valores_aquisicao_vencido:
-            m.mediana_vencido = statistics.median(self._todos_valores_aquisicao_vencido) / statistics.median(self._todas_taxas_cessao_geral)
-        
-        # Prazos médios
+
+        if self._todos_valores_aquisicao and self._todas_taxas_cessao_geral:
+            m.mediana_valor_aquisicao = self._mediana_ratio(
+                self._todos_valores_aquisicao,
+                self._todas_taxas_cessao_geral
+            )
+
+        if self._todos_valores_aquisicao_a_vencer and self._todas_taxas_cessao_geral:
+            m.mediana_a_vencer = self._mediana_ratio(
+                self._todos_valores_aquisicao_a_vencer,
+                self._todas_taxas_cessao_geral
+            )
+
+        if self._todos_valores_aquisicao_vencido and self._todas_taxas_cessao_geral:
+            m.mediana_vencido = self._mediana_ratio(
+                self._todos_valores_aquisicao_vencido,
+                self._todas_taxas_cessao_geral
+            )
+
         self._calcular_prazos_medios(m)
     
     def _calcular_tickets_medios(self, m: MetricasGlobais) -> None:
@@ -882,29 +896,34 @@ class AnaliseEstoque:
     
     # ==================== EXPORTAÇÃO ====================
     
-    def exportar_para_excel(self, output_path: str) -> bool:
-        """Exporta métricas para Excel."""
+    def exportar_para_excel(self, output) -> bool:
+        """Exporta métricas para Excel (arquivo ou buffer)."""
         try:
-            with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df_relatorio = self._construir_dataframe_relatorio()
+
+                if df_relatorio.empty:
+                    print("DataFrame principal vazio!")
+
                 df_relatorio.to_excel(writer, sheet_name='Relatório Consolidado', index=False)
                 self._formatar_planilha_excel(writer, df_relatorio)
-                
-                # Cedentes
+
                 df_cedentes = self.obter_cedentes_agrupados()
                 if not df_cedentes.empty:
                     df_cedentes.to_excel(writer, sheet_name='Cedentes', index=False)
-                
-                # Recebíveis
+
                 df_recebiveis = self.obter_recebiveis_agrupados()
                 if not df_recebiveis.empty:
                     df_recebiveis.to_excel(writer, sheet_name='Recebíveis', index=False)
-            
-            print(f"Exportação concluída: {output_path}")
+
+                writer.close()  # 🔥 importante para buffer
+
             return True
+
         except Exception as e:
             print(f"Erro na exportação: {e}")
-            return False
+        return False
+  
     
     def _construir_dataframe_relatorio(self) -> pd.DataFrame:
         """Constrói DataFrame com todas as métricas."""
@@ -1154,6 +1173,11 @@ class AnaliseEstoque:
         
         # Largura da coluna de métricas
         worksheet.set_column(0, 0, 40)
+    
+    @staticmethod
+    def formatar_numero(valor: float) -> str:
+        """Formata valor para padrão monetário brasileiro."""
+        return f"{valor:,.0f}".replace(",", ".")
     
     @staticmethod
     def formatar_moeda(valor: float) -> str:

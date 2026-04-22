@@ -25,6 +25,7 @@ mv = analise.metricas_vencimento
 fmt = AnaliseEstoque.formatar_moeda
 pct = AnaliseEstoque.formatar_percentual
 hmz = AnaliseEstoque.formatar_pl_humano
+nmr = AnaliseEstoque.formatar_numero
 
 # ── Header ────────────────────────────────────────────────────
 st.header(f"🏦 {m.nome_fundo}")
@@ -40,21 +41,21 @@ col4.metric("PDD",                    fmt(m.valor_pdd))
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("A Vencer",       fmt(m.valor_a_vencer))
 col2.metric("Vencido",        fmt(m.valor_vencido))
-col3.metric("Total Sacados",  f"{analise.total_sacados:,}")
-col4.metric("Total Cedentes", f"{analise.total_cedentes:,}")
+col3.metric("Total Sacados",  f"{nmr(analise.total_sacados)}")
+col4.metric("Total Cedentes", f"{nmr(analise.total_cedentes)}")
 
 # ── Quantidades ────────────────────────────────────────────────
 st.subheader("📜 Títulos")
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Títulos",    f"{m.qtd_aquisicao:,}")
-col2.metric("Títulos A Vencer", f"{m.qtd_a_vencer:,}")
-col3.metric("Títulos Vencidos", f"{m.qtd_vencido:,}")
+col1.metric("Total Títulos",    f"{nmr(m.qtd_aquisicao)}")
+col2.metric("Títulos A Vencer", f"{nmr(m.qtd_a_vencer)}")
+col3.metric("Títulos Vencidos", f"{nmr(m.qtd_vencido)}")
 
 # ── Mês atual ──────────────────────────────────────────────────
 st.subheader("📅 Aquisições no Mês")
 col1, col2 = st.columns(2)
 col1.metric("Valor Aquisição no Mês", fmt(mm.valor_aquisicao_mes))
-col2.metric("Qtd Aquisição no Mês",   f"{mm.qtd_aquisicao_mes:,}")
+col2.metric("Qtd Aquisição no Mês",   f"{nmr(mm.qtd_aquisicao_mes)}")
 
 # ── Última quinzena ────────────────────────────────────────────
 st.subheader("🕐 Última Quinzena")
@@ -100,8 +101,8 @@ col3.metric("Prazo Médio Vencido", f"{m.prazo_medio_vencido:.1f} dias")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Mediana Taxa (Total)",    pct(m.mediana_taxa_media))
-col2.metric("Mediana (A Vencer)", fmt(m.mediana_a_vencer))
-col3.metric("Mediana (Vencido)",  fmt(m.mediana_vencido))
+col2.metric("Mediana (A Vencer)", pct(m.mediana_a_vencer))
+col3.metric("Mediana (Vencido)",  pct(m.mediana_vencido))
 
 # ── Faixas de Vencimento ───────────────────────────────────────
 st.subheader("📆 Faixas de Vencimento")
@@ -122,31 +123,76 @@ st.dataframe(df_faixas, use_container_width=True, hide_index=True)
 st.subheader("🗂️ Por Tipo de Recebível")
 
 tipos = sorted(analise.metricas_globais_por_tipo.keys())
-tipo_sel = st.selectbox("Selecione o tipo:", tipos) if tipos else None
+opcoes = ["Todos"] + tipos
+
+tipo_sel = st.selectbox("Selecione o tipo:", opcoes) if tipos else None
+
+# Funções auxiliares
+def soma_metricas(attr):
+    return sum(getattr(mg, attr, 0) for mg in analise.metricas_globais_por_tipo.values())
+
+def soma_faixa(attr):
+    return sum(getattr(mv, attr, 0) for mv in analise.metricas_vencimento_por_tipo.values())
+
 
 if tipo_sel:
-    mg = analise.metricas_globais_por_tipo[tipo_sel]
-    mv_t = analise.metricas_vencimento_por_tipo[tipo_sel]
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Valor Presente", fmt(mg.valor_presente))
-    col2.metric("A Vencer",       fmt(mg.valor_a_vencer))
-    col3.metric("Vencido",        fmt(mg.valor_vencido))
-    col4.metric("PDD",            fmt(mg.valor_pdd))
+#----------------Total
+    if tipo_sel == "Todos":
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Prazo Médio",          f"{mg.prazo_medio:.1f} dias")
-    col2.metric("Mediana V.A",   fmt(mg.mediana_valor_aquisicao))
-    col3.metric("Mediana Taxa Cessão",  pct(mg.mediana_taxa_cessao/100))
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Valor Presente", fmt(soma_metricas("valor_presente")))
+        col2.metric("A Vencer",       fmt(soma_metricas("valor_a_vencer")))
+        col3.metric("Vencido",        fmt(soma_metricas("valor_vencido")))
+        col4.metric("PDD",            fmt(soma_metricas("valor_pdd")))
 
-    df_faixas_tipo = pd.DataFrame({
-        "Faixa (dias)": faixas_label,
-        "A Vencer (VP)": [fmt(getattr(mv_t, f"a_vencer_{a}", 0))     for a in faixas_attr],
-        "Vencido (VP)":  [fmt(getattr(mv_t, f"vencido_{a}", 0))      for a in faixas_attr],
-        "PDD A Vencer":  [fmt(getattr(mv_t, f"pdd_a_vencer_{a}", 0)) for a in faixas_attr],
-        "PDD Vencido":   [fmt(getattr(mv_t, f"pdd_vencido_{a}", 0))  for a in faixas_attr],
-    })
-    st.dataframe(df_faixas_tipo, use_container_width=True, hide_index=True)
+        #  média simples (se quiser te faço ponderada depois)
+        import numpy as np
+        prazo_medio = np.mean([
+            mg.prazo_medio for mg in analise.metricas_globais_por_tipo.values()
+        ])
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Prazo Médio", f"{prazo_medio:.1f} dias")
+        col2.metric("Mediana V.A", pct(soma_metricas("mediana_valor_aquisicao")))
+        col3.metric("Mediana Taxa Cessão", pct(soma_metricas("mediana_taxa_cessao")/100))
+
+        df_faixas_tipo = pd.DataFrame({
+            "Faixa (dias)": faixas_label,
+            "A Vencer (VP)": [fmt(soma_faixa(f"a_vencer_{a}"))     for a in faixas_attr],
+            "Vencido (VP)":  [fmt(soma_faixa(f"vencido_{a}"))      for a in faixas_attr],
+            "PDD A Vencer":  [fmt(soma_faixa(f"pdd_a_vencer_{a}")) for a in faixas_attr],
+            "PDD Vencido":   [fmt(soma_faixa(f"pdd_vencido_{a}"))  for a in faixas_attr],
+        })
+
+        st.dataframe(df_faixas_tipo, width='stretch', hide_index=True)
+#----------------Filtro
+    else:
+        mg = analise.metricas_globais_por_tipo[tipo_sel]
+        mv_t = analise.metricas_vencimento_por_tipo[tipo_sel]
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Valor Presente", fmt(mg.valor_presente))
+        col2.metric("A Vencer",       fmt(mg.valor_a_vencer))
+        col3.metric("Vencido",        fmt(mg.valor_vencido))
+        col4.metric("PDD",            fmt(mg.valor_pdd))
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Prazo Médio", f"{mg.prazo_medio:.1f} dias")
+        col2.metric("Mediana V.A", pct(mg.mediana_valor_aquisicao))
+        col3.metric("Mediana Taxa Cessão", pct(mg.mediana_taxa_cessao/100))
+
+        df_faixas_tipo = pd.DataFrame({
+            "Faixa (dias)": faixas_label,
+            "A Vencer (VP)": [fmt(getattr(mv_t, f"a_vencer_{a}", 0))     for a in faixas_attr],
+            "Vencido (VP)":  [fmt(getattr(mv_t, f"vencido_{a}", 0))      for a in faixas_attr],
+            "PDD A Vencer":  [fmt(getattr(mv_t, f"pdd_a_vencer_{a}", 0)) for a in faixas_attr],
+            "PDD Vencido":   [fmt(getattr(mv_t, f"pdd_vencido_{a}", 0))  for a in faixas_attr],
+        })
+
+        st.dataframe(df_faixas_tipo, width='stretch', hide_index=True)
+        
+
 
 # ── Cedentes e Recebíveis ──────────────────────────────────────
 st.subheader("🏢 Cedentes")
@@ -174,18 +220,23 @@ data_atual = datetime.now().strftime("%d_%m_%Y")
 nome_base = m.nome_fundo.split()[0] #arquivo_selecionado.name.split('.')[0]
 nome_arquivo = f"relatorio_{nome_base}_{data_atual}.xlsx"
 
-if st.button("📥 Gerar arquivo para download"):
-    with st.spinner("Gerando arquivo..."):
-        try:
-            if "analise" in st.session_state:
-                buffer = io.BytesIO()
-                analise.exportar_para_excel(buffer)
-                buffer.seek(0)
+buffer = io.BytesIO()
+analise.exportar_para_excel(buffer)
+buffer.seek(0)
 
-                st.download_button(
-                    "⬇️ Baixar Excel",
-                    buffer,
-                    file_name=nome_arquivo
-                )
-        except Exception as e:
-            st.error(f"Erro ao gerar arquivo: {e}")
+
+if st.button("📥 Gerar arquivo"):
+    buffer = io.BytesIO()
+    sucesso = analise.exportar_para_excel(buffer)
+
+    if sucesso:
+        buffer.seek(0)
+
+        st.download_button(
+            "⬇️ Baixar Excel",
+            data=buffer.getvalue(),
+            file_name=nome_arquivo,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.error("Erro ao gerar arquivo")

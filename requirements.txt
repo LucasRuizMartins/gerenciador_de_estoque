@@ -3,8 +3,9 @@ pip
 python-dotenv
 ruff
 humanize
+xlsxwriter
 pandas
+openpyxl
 numpy
 typing
 dataclasses
--e .

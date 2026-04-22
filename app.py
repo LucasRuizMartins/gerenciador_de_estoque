@@ -25,6 +25,12 @@ pagina_leitor_cnab = st.Page(
     icon="📄"
 )
 
+pagina_pdd = st.Page(
+    "pages/calcular_pdd.py", 
+    title="calcular pdd", 
+    icon="📄"
+)
+
 
 pg = st.navigation([pagina_estoque,pagina_leitor_cnab])
 
