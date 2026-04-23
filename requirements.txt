@@ -3,6 +3,7 @@ pip
 python-dotenv
 ruff
 humanize
+plotly
 xlsxwriter
 pandas
 openpyxl

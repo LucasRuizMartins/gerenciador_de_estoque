@@ -4,6 +4,7 @@ import plotly.express as px
 
 
 from zipfile import ZipFile
+
 from io import BytesIO
 
 from src.utils_visuals import plot_pdd_horizontal
@@ -129,16 +130,31 @@ st.dataframe(
 
 # Downloads
 
-_,btn1,btn2 = st.columns([8,1,1])
+    
+    # Downloads
+_, btn1, btn2 = st.columns([8, 1.5, 1.5])  
 
 with btn1:
-
+    buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False)
-    st.download_button("📥 Excel", buffer.getvalue(), "pdd.xlsx",use_container_width=True)
+        df.to_excel(writer, index=False, sheet_name='PDD')
+
+    data_xlsx = buffer.getvalue()
+    
+    st.download_button(
+        label="📥 Excel",
+        data=data_xlsx,
+        file_name=f"{fundo_selecionado}_pdd_consolidado.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
 
 with btn2:
     csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("📥 CSV", csv, "pdd.csv",use_container_width=True)
-    
-    
+    st.download_button(
+        label="📥 CSV",
+        data=csv,
+        file_name=f"{fundo_selecionado}_pdd_consolidado.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
