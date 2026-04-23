@@ -77,3 +77,19 @@ def agregar_chunks(caminho_zip: str, colunas: list = None):
     # return pd.concat(resultado_parcial).groupby(level=0).sum()
 
 
+def ler_zip(file):
+    dfs = []
+    with ZipFile(file) as z:
+        for name in z.namelist():
+            if name.endswith(".csv"):
+                with z.open(name) as f:
+                    dfs.append(pd.read_csv(
+                        f,
+                        encoding="ISO-8859-1",
+                        delimiter=";",
+                        decimal=",",
+                        thousands=".",
+                        on_bad_lines="skip",
+                        low_memory=False
+                    ))
+    return pd.concat(dfs, ignore_index=True)

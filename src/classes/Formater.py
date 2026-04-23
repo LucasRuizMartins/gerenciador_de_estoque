@@ -31,6 +31,14 @@ class Formater:
     def formatar_percentual(valor: float) -> str:
         """Formata valor para percentual brasileiro."""
         return f"{valor*100:,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+    @staticmethod
+    def formatar_numero(valor: float) -> str:
+        """Formata valor para padrão monetário brasileiro."""
+        return f"{valor:,.0f}".replace(",", ".")
+    
+    def formatar_numero_decimal(valor: float) -> str:
+        """Formata valor para padrão monetário com casas decimais."""
+        return f"{valor:,.2f}".replace(",", ".")
     
     @classmethod
     def formatar_pl_humano(valor):
