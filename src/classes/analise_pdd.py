@@ -1,11 +1,6 @@
 import pandas as pd
 import numpy as np
 
-
-
-
-
-
 CONFIG_PDD = {
     "APEX-MOOVPAY": {
         "faixas": [
@@ -84,23 +79,21 @@ def ordenar_pdd(df, faixas):
     return df.sort_values("FAIXA_PDD").reset_index(drop=True)
 
 
-def processar_pdd(df_estoque, usar_vagao, faixas):
+def processar_pdd(df_estoque, usar_vagao, faixas, filtrar_wop=True):
     COLUNAS = [
         "DOC_SACADO", "SEU_NUMERO", "SITUACAO_RECEBIVEL",
         "NU_DOCUMENTO", "VALOR_PDD", "PRAZO_ATUAL",
         "VALOR_AQUISICAO", "VALOR_NOMINAL", "VALOR_PRESENTE", "DATA_REFERENCIA"
     ]
-
+    if filtrar_wop:
+        df_estoque = df_estoque[df_estoque['FAIXA_PDD'] !='WOP']
     df = df_estoque[[c for c in COLUNAS if c in df_estoque.columns]].copy()
 
     # Garantir tipos
     df["PRAZO_ATUAL"] = pd.to_numeric(df["PRAZO_ATUAL"], errors="coerce")
     df["VALOR_PRESENTE"] = pd.to_numeric(df["VALOR_PRESENTE"], errors="coerce")
-
-    # Classificação inicial
     df["FAIXA_PDD"] = df["PRAZO_ATUAL"].apply(lambda x: categorizar_prazo(x, faixas))
 
-    # Modo vagão (igual lógica antiga)
     if usar_vagao:
         df = df.groupby("DOC_SACADO").agg(
             VALOR_AQUISICAO=("VALOR_AQUISICAO", "sum"),

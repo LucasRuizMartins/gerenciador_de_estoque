@@ -9,7 +9,7 @@ from io import BytesIO
 
 from src.utils_visuals import plot_pdd_horizontal
 from src.classes.Formater import Formater as fmt  
-from src.data_loader import ler_zip  
+from src.data_loader import ler_zip, ler_csv
 from src.classes.analise_pdd import categorizar_prazo,percentual_pdd,ordenar_pdd,processar_pdd,criar_dataframe_pdd,CONFIG_PDD
 
 
@@ -23,7 +23,7 @@ st.title("📉 Análise PDD")
 # CONFIGURAÇÕES DE PDD
 col1, col2 = st.columns(2)
 
-zip_file = col1.file_uploader("ZIP do Estoque", type=["zip"])
+arquivo_estoque = col1.file_uploader("Arquivo de Estoque (ZIP ou CSV)", type=["zip", "csv"])
 
 opcoes_prefixos = sorted(list(set(f.split('-')[0] for f in CONFIG_PDD.keys())))
 tipo_pdd = col2.selectbox("Tipo de PDD", opcoes_prefixos)
@@ -34,20 +34,25 @@ fundo_selecionado = col2.selectbox("Fundo", fundos)
 faixas = CONFIG_PDD[fundo_selecionado]["faixas"]
 
 usar_vagao = st.toggle("Agrupar por sacado (modo vagão)", value=True)
+filtrar_wop_toggle = st.toggle("Filtrar WOP", value=True)
 
-if not zip_file:
+if not arquivo_estoque:
     st.stop()
 
 if st.button("🚀 Processar"):
     with st.spinner("Processando..."):
-        df_estoque = ler_zip(zip_file)
-        resultado = processar_pdd(df_estoque, usar_vagao, faixas)
+        if arquivo_estoque.name.endswith(".zip"):
+            df_estoque = ler_zip(arquivo_estoque)
+        else:
+            df_estoque = ler_csv(arquivo_estoque)
+        resultado = processar_pdd(df_estoque, usar_vagao, faixas, filtrar_wop_toggle)
         df_pdd_processado = criar_dataframe_pdd(df_estoque) # Criando o dataframe
         
         # Salva tudo no session_state
         st.session_state["pdd_resultado"] = resultado
         st.session_state["df_pdd"] = df_pdd_processado 
         st.session_state["pdd_data_ref"] = df_estoque["DATA_REFERENCIA"].iloc[0]
+        st.session_state["filtrar_wop"] = filtrar_wop_toggle
 
 # Só segue se AMBOS existirem no estado da sessão
 if "pdd_resultado" not in st.session_state or "df_pdd" not in st.session_state:
@@ -62,7 +67,8 @@ total = df[df["FAIXA_PDD"] == "Total"].iloc[0]
 c1, c2 = st.columns([1, 3])
 
 df_perc = df[df["FAIXA_PDD"] != "Total"]
-
+if st.session_state.get("filtrar_wop", True):
+    df_perc = df_perc[df_perc['FAIXA_PDD'] != 'WOP']
 with c1:
     st.write("Distribuição de faixas")
     # Removi um '%' extra que estava na sua string de formato para não repetir
@@ -109,10 +115,10 @@ st.caption(f"Data de referência: {st.session_state['pdd_data_ref']}")
 
 # KPIs
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Valor Nominal", f"R$ {nmrd(total['VALOR_NOMINAL'])}")
-c2.metric("Valor Presente", f"R$ {nmrd(total['VALOR_PRESENTE'])}")
-c3.metric("Valor Aquisição", f"R$ {nmrd(total['VALOR_AQUISICAO'])}")
-c4.metric("PDD por Faixa", f"R$ {nmrd(total['PDD POR FAIXA'])}")
+c1.metric("Valor Nominal", f"{hmz(total['VALOR_NOMINAL'])}")
+c2.metric("Valor Presente", f"{hmz(total['VALOR_PRESENTE'])}")
+c3.metric("Valor Aquisição", f"{hmz(total['VALOR_AQUISICAO'])}")
+c4.metric("PDD por Faixa", f"{hmz(total['PDD POR FAIXA'])}")
 
 # Tabela
 st.dataframe(

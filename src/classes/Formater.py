@@ -41,7 +41,8 @@ class Formater:
         return f"{valor:,.2f}".replace(",", ".")
     
     @classmethod
-    def formatar_pl_humano(valor):
+    def formatar_pl_humano(self,valor):
+        humanize.activate("pt_BR")
         try:
             # 1. Garante que o valor seja numérico (float/int)
             valor_num = pd.to_numeric(valor, errors='coerce')

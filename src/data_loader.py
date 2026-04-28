@@ -93,3 +93,15 @@ def ler_zip(file):
                         low_memory=False
                     ))
     return pd.concat(dfs, ignore_index=True)
+
+def ler_csv(file):
+    return pd.read_csv(
+        file,
+        encoding="ISO-8859-1",
+        delimiter=";",
+        decimal=",",
+        thousands=".",
+        on_bad_lines="skip",
+        low_memory=False
+    )
+
