@@ -79,21 +79,28 @@ def carregar_modelo(caminho: str):
     return joblib.load(caminho)
 
 
-def classificar_com_limiar(modelo, textos: pd.Series, limiar: float) -> list[str]:
-    """Classifica textos e marca como CATEGORIA_DESCONHECIDA quando a confiança
-    (distância da margem de decisão do LinearSVC) for menor que o limiar.
+def classificar_com_limiar(modelo, textos: pd.Series, limiar: float) -> list[dict]:
+    """Classifica textos e retorna um dicionário com:
+    - categoria_final: a classe final (ou DESCONHECIDA se confiança for baixa)
+    - palpite_modelo: o que o modelo previu originalmente
+    - score: a pontuação de confiança
     """
-    scores = modelo.decision_function(textos)     # shape (n, n_classes)
-    # Garante que scores seja sempre 2D (caso binário retorna 1D)
+    scores = modelo.decision_function(textos)
     if scores.ndim == 1:
         scores = scores.reshape(-1, 1)
-    max_scores = np.max(scores, axis=1)           # Maior pontuação por linha
-    previsoes = modelo.predict(textos)             # Classe prevista
-    resultado = [
-        cat if score >= limiar else CATEGORIA_DESCONHECIDA
-        for cat, score in zip(previsoes, max_scores)
-    ]
-    return resultado
+    
+    max_scores = np.max(scores, axis=1)
+    previsoes = modelo.predict(textos)
+    
+    resultados = []
+    for cat, score in zip(previsoes, max_scores):
+        cat_final = cat if score >= limiar else CATEGORIA_DESCONHECIDA
+        resultados.append({
+            'categoria_final': cat_final,
+            'palpite_modelo': cat,
+            'score': round(float(score), 3)
+        })
+    return resultados
 
 
 def converter_para_excel(df: pd.DataFrame) -> bytes:
@@ -150,10 +157,9 @@ def mesclar_debito_credito(df: pd.DataFrame) -> tuple[pd.DataFrame, str | None, 
 
 
 # INTERFACE
-st.title("🤖 Classificador de Históricos")
+st.title("Classificador de Históricos")
 st.markdown("Classifique automaticamente os históricos financeiros usando um modelo de Machine Learning treinado.")
 
-st.divider()
 
 # --- Coluna de Configurações e Coluna de Upload ---
 col_cfg, col_upload = st.columns([1, 2], gap="large")
@@ -161,7 +167,7 @@ col_cfg, col_upload = st.columns([1, 2], gap="large")
 with col_cfg:
     st.subheader("⚙️ Configurações")
 
-    # 1. SELEÇÃO DO MODELO
+    # SELEÇÃO DO MODELO
     modelos_disponiveis = listar_modelos(PASTA_MODELOS)
 
     if not modelos_disponiveis:
@@ -183,6 +189,7 @@ with col_cfg:
         modelo = carregar_modelo(caminho_modelo)
 
     st.success(f"Modelo carregado: `{modelo_selecionado}`")
+    
 
     # Exibe as categorias que o modelo conhece
     with st.expander("📋 Ver categorias do modelo"):
@@ -206,6 +213,10 @@ with col_cfg:
         )
     )
 
+    # Botão de processamento aqui nas configurações
+    if st.button("🚀 Iniciar Classificação", use_container_width=True, type="primary"):
+        st.session_state['disparar_processo'] = True
+
 with col_upload:
     st.subheader("📂 Upload do Arquivo")
 
@@ -225,11 +236,15 @@ with col_upload:
             st.error(f"Erro ao abrir o arquivo: {e}")
             st.stop()
 
-        aba_selecionada = st.selectbox(
-            "📑 Selecione a aba (sheet)",
-            options=abas_disponiveis,
-            help="Escolha qual aba do Excel será processada."
-        )
+        # Seleção da aba
+        aba_selecionada = st.selectbox("📄 Selecione a aba do Excel", options=abas_disponiveis)
+
+        # Se a aba mudar, limpamos o resultado anterior para evitar erros de colunas diferentes
+        if 'ultima_aba' not in st.session_state or st.session_state['ultima_aba'] != aba_selecionada:
+            st.session_state['ultima_aba'] = aba_selecionada
+            if 'df_resultado' in st.session_state:
+                del st.session_state['df_resultado']
+                st.rerun() # Reinicia para limpar a tela
 
         try:
             df = pd.read_excel(xls, sheet_name=aba_selecionada)
@@ -262,79 +277,138 @@ with col_upload:
                 options=df.columns.tolist(),
                 help="Nenhuma coluna 'historico' foi detectada. Selecione manualmente."
             )
-            st.warning("Nenhuma coluna com nome 'historico' foi encontrada. Verifique a seleção.")
-
+            st.warning("Nenhuma coluna com nome 'historico' foi encontrada.")
         st.info(f"Arquivo carregado: **{arquivo_excel.name}** — {len(df):,} linhas encontradas.")
+        if st.session_state.get('disparar_processo', False):
+            # 4. PROCESSAMENTO
+            with st.spinner("Classificando históricos..."):
+                df['_Historico_Limpo'] = df[coluna_historico_input].apply(limpar_texto)
+                
+                # Chama a função que retorna a lista de dicionários
+                resultados = classificar_com_limiar(modelo, df['_Historico_Limpo'], limiar)
+                
+                # Extrai cada campo para colunas separadas
+                df[COLUNA_RESULTADO] = [r['categoria_final'] for r in resultados]
+                df['CLASSIFICACAO_MODELO'] = [r['palpite_modelo'] for r in resultados]
+                df['CONFIANCA'] = [r['score'] for r in resultados]
+                
+                df = df.drop(columns=['_Historico_Limpo'])
 
-        # 4. PROCESSAMENTO
-        with st.spinner("Classificando históricos..."):
-            df['_Historico_Limpo'] = df[coluna_historico_input].apply(limpar_texto)
-            df[COLUNA_RESULTADO] = classificar_com_limiar(modelo, df['_Historico_Limpo'], limiar)
-            df = df.drop(columns=['_Historico_Limpo'])
+                # --- MESCLAGEM DÉBITO / CRÉDITO ---
+                df, col_deb_encontrada, col_cred_encontrada = mesclar_debito_credito(df)
+                
+                # Salva o resultado e limpa o gatilho
+                st.session_state['df_resultado'] = df
+                st.session_state['colunas_mescladas'] = (col_deb_encontrada, col_cred_encontrada)
+                st.session_state['disparar_processo'] = False
+                st.success("Processamento concluído!")
 
-            # --- MESCLAGEM DÉBITO / CRÉDITO ---
-            df, col_deb_encontrada, col_cred_encontrada = mesclar_debito_credito(df)
+        # Só exibe os resultados se eles existirem no session_state
+        if 'df_resultado' in st.session_state:
+            df_proc = st.session_state['df_resultado']
+            col_deb_encontrada, col_cred_encontrada = st.session_state['colunas_mescladas']
+            
+            n_desconhecidos = (df_proc[COLUNA_RESULTADO] == CATEGORIA_DESCONHECIDA).sum()
 
-        if col_deb_encontrada or col_cred_encontrada:
-            partes = []
-            if col_deb_encontrada:
-                partes.append(f"`{col_deb_encontrada}` (Débito → negativo)")
-            if col_cred_encontrada:
-                partes.append(f"`{col_cred_encontrada}` (Crédito → positivo)")
-            st.info(f"🔄 Colunas mescladas em **Lançamento (D/C)**: {' + '.join(partes)}")
+            # PREVIEW E MÉTRICAS
+            st.divider()
+            st.subheader("📊 Resultado")
 
-        n_desconhecidos = (df[COLUNA_RESULTADO] == CATEGORIA_DESCONHECIDA).sum()
-        if n_desconhecidos > 0:
-            st.warning(
-                f"✅ {len(df):,} linhas processadas — "
-                f"⚠️ **{n_desconhecidos}** marcadas como *'{CATEGORIA_DESCONHECIDA}'* "
-                f"(confiança abaixo de {limiar:.2f})."
-            )
-        else:
-            st.success(f"✅ {len(df):,} linhas classificadas com sucesso!")
+            # Métricas por categoria
+            contagem_categorias = df_proc[COLUNA_RESULTADO].value_counts().reset_index()
+            contagem_categorias.columns = ['Categoria', 'Quantidade']
 
-        # PREVIEW E MÉTRICAS
-        st.divider()
-        st.subheader("📊 Resultado")
+            col_result_1, col_result_2, col_result_3 = st.columns(3)
 
-        # Métricas por categoria
-        contagem_categorias = df[COLUNA_RESULTADO].value_counts().reset_index()
-        contagem_categorias.columns = ['Categoria', 'Quantidade']
+            with col_result_1:
+                st.metric("Total de registros", f"{len(df_proc):,}")
 
-        col_m1, col_m2 = st.columns([2, 3])
+            with col_result_2:
+                st.metric("Categorias distintas", f"{df_proc[COLUNA_RESULTADO].nunique()}")
 
-        with col_m1:
-            st.metric("Total de registros", f"{len(df):,}")
-            st.metric("Categorias distintas", f"{df[COLUNA_RESULTADO].nunique()}")
-            st.dataframe(
-                contagem_categorias,
+            with col_result_3:
+                st.metric("Não classificadas", f"{n_desconhecidos}")
+
+            col_m1, col_m2 = st.columns([2, 3])
+            
+            with col_m1:
+                st.dataframe(
+                    contagem_categorias,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+            with col_m2:
+                # Usa a coluna de histórico que foi selecionada no início
+                try:
+                    if coluna_historico_input in df_proc.columns:
+                        st.dataframe(
+                            df_proc[[coluna_historico_input, COLUNA_RESULTADO]].head(50),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        if len(df_proc) > 50:
+                            st.caption(f"Exibindo 50 de {len(df_proc):,} linhas.")
+                    else:
+                        st.warning(f"⚠️ Coluna '{coluna_historico_input}' não encontrada no resultado.")
+                except Exception:
+                    st.error("❌ Histórico não encontrado ou erro ao exibir preview.")
+
+            with st.expander("ℹ️ Detalhes das categorias desconhecidas"):
+                linhas_desconhecidas = df_proc[df_proc[COLUNA_RESULTADO] == CATEGORIA_DESCONHECIDA].copy()
+                if not linhas_desconhecidas.empty:
+                    st.markdown(f"O modelo identificou os seguintes padrões, mas a confiança foi menor que **{limiar:.2f}**:")
+                    
+                    # Renomeia para exibição amigável na UI
+                    linhas_desconhecidas_view = linhas_desconhecidas.rename(columns={
+                        'CLASSIFICACAO_MODELO': 'SUGESTÃO_MODELO',
+                        'CONFIANCA': 'CONFIANÇA'
+                    })
+
+                    resumo_sugestoes = linhas_desconhecidas_view.groupby('SUGESTÃO_MODELO').agg(
+                        Quantidade=('SUGESTÃO_MODELO', 'count'),
+                        Confianca_Media=('CONFIANÇA', 'mean')
+                    ).sort_values(by='Quantidade', ascending=False).reset_index()
+                    
+                    st.write("**Sugestões de Categorias para Cadastro:**")
+                    st.dataframe(
+                        resumo_sugestoes.style.format({'Confianca_Media': "{:.1%}"}),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    st.divider()
+                    st.write("**Detalhamento das Linhas:**")
+                    display_cols = [coluna_historico_input, 'SUGESTÃO_MODELO', 'CONFIANÇA']
+                    st.dataframe(
+                        linhas_desconhecidas_view[display_cols].style.format({'CONFIANÇA': "{:.1%}"}),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.success("Todas as linhas foram classificadas com confiança suficiente!")
+
+            # DOWNLOAD E INFO DE MESCLAGEM
+            if col_deb_encontrada or col_cred_encontrada:
+                partes = []
+                if col_deb_encontrada: partes.append(f"`{col_deb_encontrada}`")
+                if col_cred_encontrada: partes.append(f"`{col_cred_encontrada}`")
+                st.info(f"🔄 Colunas mescladas em **Lançamento (D/C)**: {' + '.join(partes)}")
+
+            st.divider()
+            # Remove as colunas técnicas antes de gerar o download
+            df_download = df_proc.drop(columns=['CLASSIFICACAO_MODELO', 'CONFIANCA'], errors='ignore')
+            excel_bytes = converter_para_excel(df_download)
+            nome_download = arquivo_excel.name.replace('.xlsx', f'_classificado.xlsx')
+
+            st.download_button(
+                label="⬇️ Baixar Excel Classificado",
+                data=excel_bytes,
+                file_name=nome_download,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
-                hide_index=True
+                type="primary"
             )
-
-        with col_m2:
-            st.dataframe(
-                df[[coluna_historico_input, COLUNA_RESULTADO]].head(50),
-                use_container_width=True,
-                hide_index=True
-            )
-            if len(df) > 50:
-                st.caption(f"Exibindo 50 de {len(df):,} linhas.")
-
-        # 6. DOWNLOAD
-        st.divider()
-        excel_bytes = converter_para_excel(df)
-
-        nome_download = arquivo_excel.name.replace('.xlsx', f'_classificado.xlsx')
-
-        st.download_button(
-            label="⬇️ Baixar Excel Classificado",
-            data=excel_bytes,
-            file_name=nome_download,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-            type="primary"
-        )
 
     else:
         st.info("Faça upload de um arquivo `.xlsx` para começar.")
