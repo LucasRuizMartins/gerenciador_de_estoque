@@ -1,12 +1,18 @@
+# --- Dev / Docs ---
 mkdocs
 pip
 python-dotenv
 ruff
+
+# --- Data ---
+pandas
+numpy
+openpyxl
+xlsxwriter
 humanize
 plotly
-xlsxwriter
-pandas
-openpyxl
-numpy
-typing
-dataclasses
+
+# --- Machine Learning ---
+scikit-learn
+scipy
+joblib

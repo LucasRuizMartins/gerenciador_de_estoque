@@ -31,8 +31,14 @@ pagina_pdd = st.Page(
     icon="📉"
 )
 
+pagina_classificador = st.Page(
+    "pages/classificar_historico.py",
+    title="Classificador de Históricos",
+    icon="💻"
+)
 
-pg = st.navigation([pagina_estoque,pagina_leitor_cnab,pagina_pdd])
+
+pg = st.navigation([pagina_estoque, pagina_leitor_cnab, pagina_pdd, pagina_classificador])
 
 
 pg.run()

@@ -34,7 +34,7 @@ fundo_selecionado = col2.selectbox("Fundo", fundos)
 faixas = CONFIG_PDD[fundo_selecionado]["faixas"]
 
 usar_vagao = st.toggle("Agrupar por sacado (modo vagão)", value=True)
-filtrar_wop_toggle = st.toggle("Filtrar WOP", value=True)
+filtrar_wop_toggle = st.toggle("Filtrar WOP", value=False)
 
 if not arquivo_estoque:
     st.stop()
@@ -71,7 +71,6 @@ if st.session_state.get("filtrar_wop", True):
     df_perc = df_perc[df_perc['FAIXA_PDD'] != 'WOP']
 with c1:
     st.write("Distribuição de faixas")
-    # Removi um '%' extra que estava na sua string de formato para não repetir
     st.dataframe(
         df_perc[["FAIXA_PDD","% PDD"]].style.format({'% PDD': "{:.1%}"}),
         hide_index=True,
@@ -135,9 +134,6 @@ st.dataframe(
 )
 
 # Downloads
-
-    
-    # Downloads
 _, btn1, btn2 = st.columns([8, 1.5, 1.5])  
 
 with btn1:
