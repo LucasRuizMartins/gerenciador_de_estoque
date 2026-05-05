@@ -32,28 +32,6 @@ Esta ferramenta converte planilhas Excel para o formato **CNAB 444 (Remessa V2)*
 Selecione o fundo na barra lateral e faça o upload da planilha.
 """)
 
-# Botão para baixar template
-@st.cache_data
-def gerar_template_excel():
-    colunas = [
-        "NOME_CEDENTE", "DOC_CEDENTE", "NOME_SACADO", "DOC_SACADO", 
-        "ENDERECO", "CEP", "VALOR_NOMINAL", 
-        "VALOR_PAGO","VALOR_PRESENTE", "VALOR_AQUISICAO", "DATA_VENCIMENTO_AJUSTADA", 
-        "DATA_EMISSAO", "DATA_AQUISICAO", "NU_DOCUMENTO", "SEU_NUMERO","IDENTIFICACAO_OCORRENCIA","TIPO_RECEBIVEL"
-    ]
-    df_template = pd.DataFrame(columns=colunas)
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df_template.to_excel(writer, index=False, sheet_name='Template')
-    return output.getvalue()
-
-st.download_button(
-    label="📥 Baixar Planilha Modelo (Excel)",
-    data=gerar_template_excel(),
-    file_name="modelo_remessa_cnab444.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-
 st.markdown("---")
 
 # Barra Lateral - Seleção de Fundo
@@ -108,6 +86,32 @@ with st.sidebar.expander("🎯 Parâmetros da Remessa"):
     ).split(" - ")[0]
     
     config["valor_retencao"] = st.number_input("Valor Retenção", value=config["valor_retencao"])
+
+# Template de Excel na barra lateral
+st.sidebar.markdown("---")
+st.sidebar.subheader("📄 Template")
+
+@st.cache_data
+def gerar_template_excel():
+    colunas = [
+        "NOME_CEDENTE", "DOC_CEDENTE", "NOME_SACADO", "DOC_SACADO", 
+        "ENDERECO", "CEP", "VALOR_NOMINAL", 
+        "VALOR_PAGO","VALOR_PRESENTE", "VALOR_AQUISICAO", "DATA_VENCIMENTO_AJUSTADA", 
+        "DATA_EMISSAO", "DATA_AQUISICAO", "NU_DOCUMENTO", "SEU_NUMERO","IDENTIFICACAO_OCORRENCIA","TIPO_RECEBIVEL"
+    ]
+    df_template = pd.DataFrame(columns=colunas)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_template.to_excel(writer, index=False, sheet_name='Template')
+    return output.getvalue()
+
+st.sidebar.download_button(
+    label="📥 Baixar Planilha Modelo",
+    data=gerar_template_excel(),
+    file_name="modelo_remessa_cnab444.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True
+)
 
 # Upload do Arquivo
 arquivo_excel = st.file_uploader("Selecione o arquivo Excel (.xlsx)", type=["xlsx"])
