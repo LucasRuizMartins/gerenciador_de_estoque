@@ -85,7 +85,7 @@ def processar_pdd(df_estoque, usar_vagao, faixas, filtrar_wop=True):
         "NU_DOCUMENTO", "VALOR_PDD", "PRAZO_ATUAL",
         "VALOR_AQUISICAO", "VALOR_NOMINAL", "VALOR_PRESENTE", "DATA_REFERENCIA"
     ]
-    if filtrar_wop:
+    if filtrar_wop and "FAIXA_PDD" in df_estoque.columns:
         df_estoque = df_estoque[df_estoque['FAIXA_PDD'] !='WOP']
     df = df_estoque[[c for c in COLUNAS if c in df_estoque.columns]].copy()
 

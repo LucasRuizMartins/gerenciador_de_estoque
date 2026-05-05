@@ -39,6 +39,11 @@ format:
 	ruff check --fix
 	ruff format
 
+## Run tests
+.PHONY: test
+test:
+	pytest tests/unit
+
 
 
 

@@ -19,3 +19,10 @@ def mensagem_sucesso():
     sucesso = st.success('arquivo baixado com sucesso', icon = '✅')
     time.sleep(5)
     sucesso.empty()
+
+
+def limpar_cpf_cnpj(valor: str) -> str:
+    """Remove caracteres não numéricos de uma string."""
+    if not isinstance(valor, str):
+        return str(valor)
+    return "".join(filter(str.isdigit, valor))

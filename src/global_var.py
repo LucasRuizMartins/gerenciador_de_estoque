@@ -41,3 +41,32 @@ MAP_OCORRENCIA = {
     '84': 'Entrada por recompra (Troca - Liq. Cedente)',
     '87': 'Reativação'
 }
+
+
+MAP_ESPECIE_TITULO = {
+    1: "Duplicata",
+    2: "Nota Promissória",
+    3: "Nota de Seguro",
+    4: "Cobrança Seriada",
+    5: "Recibo",
+    10: "Letras de Câmbio",
+    11: "Nota de Débito",
+    13: "Precatórios",
+    14: "Duplicata de Serviço Físico",
+    21: "Renegociação da Dívida",
+    41: "CCB Digital",
+    50: "NF - Nota Fiscal",
+    51: "Cheque",
+    52: "Cheque - Manual",
+    60: "Contrato",
+    61: "Contrato Físico",
+    62: "Confissão de Dívida",
+    64: "Assunção de Dívida",
+    65: "Fatura de Cartão de Crédito",
+    70: "CCB Pré Digital",
+    71: "CCB Pré Balcão",
+    72: "CCB Pré Cetip",
+    73: "Outros",
+    74: "CCB - Formalização Fonada",
+    87: "Cheque"
+}

@@ -3,6 +3,8 @@ mkdocs
 pip
 python-dotenv
 ruff
+pytest
+pytest-mock
 
 # --- Data ---
 pandas

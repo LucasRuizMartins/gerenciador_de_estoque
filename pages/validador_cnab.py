@@ -8,10 +8,8 @@ from src import global_var
 from src.components import selector
 from datetime import datetime
 from src.classes.CnabParserFactory import CNABParserFactory
-import streamlit as st
-from src.classes.CnabParserFactory import CNABParserFactory
 from src.classes.Formater import Formater as fmt
-from src.global_var import MAP_OCORRENCIA
+from src.global_var import MAP_OCORRENCIA, MAP_ESPECIE_TITULO
 
 st.title("📄 Leitor de Arquivo CNAB")
 
@@ -61,21 +59,34 @@ contagem.columns = ['Código','Quantidade']
 contagem['Descrição'] = contagem['Código'].map(MAP_OCORRENCIA)
 contagem = contagem[['Código','Descrição','Quantidade']]
 
+# Resumo de Espécies
+st.write("### Espécies de Títulos")
+contagem_esp = df['especie_titulo'].value_counts().reset_index()
+contagem_esp.columns = ['Código','Quantidade']
+# Converte código string para int para bater com o MAP_ESPECIE_TITULO
+contagem_esp['Descrição'] = contagem_esp['Código'].apply(lambda x: MAP_ESPECIE_TITULO.get(int(x) if str(x).isdigit() else x, "Desconhecido"))
+contagem_esp = contagem_esp[['Código','Descrição','Quantidade']]
+
 
 
 
 col1,col2 = st.columns(2)
-col1.dataframe(contagem, hide_index=True, use_container_width=True)
+with col1:
+    st.write("**Ocorrências**")
+    st.dataframe(contagem, hide_index=True, use_container_width=True)
+with col2:
+    st.write("**Espécies**")
+    st.dataframe(contagem_esp, hide_index=True, use_container_width=True)
 
 st.write("### Resumo de Ocorrências no Arquivo")
 col1, col2, col3, col4, col5,col6 = st.columns(6)
 
 col1.metric("Total Títulos", f"{len(df):}")
 col2.metric("Valor Nominal Total", fmt.format_br(df['valor_nominal'].sum()))
-col3.metric("Valor Presente Total", fmt.format_br(df['valor_presente'].sum()))
-col4.metric("Contagem de Sacados", f"{df['doc_sacado'].nunique():}")
-col5.metric("Contagem de Cedentes", f"{df['cedente'].nunique():,}")
-col6.metric("Tipo de Cedente", fmt.definir_tipo_cedente(df))
+col3.metric("Valor Pago Total", fmt.format_br(df['valor_pago'].sum()))
+col4.metric("Valor Presente Total", fmt.format_br(df['valor_presente'].sum()))
+col5.metric("Contagem de Sacados", f"{df['doc_sacado'].nunique():}")
+col6.metric("Contagem de Cedentes", f"{df['cedente'].nunique():,}")
 
 
 # ── Tabela ─────────────────────────────────────
@@ -83,12 +94,14 @@ col6.metric("Tipo de Cedente", fmt.definir_tipo_cedente(df))
 st.dataframe(
     df.style.format({
         'valor_nominal': 'R$ {:,.2f}',
+        'valor_pago': 'R$ {:,.2f}',
         'valor_presente': 'R$ {:,.2f}',
         'data_vencimento': fmt.format_cnab_data,
         'doc_cedente': fmt.format_documento,
         'tipo_cedente': fmt.definir_tipo_documento,
         'doc_sacado': fmt.format_documento,
         'tipo_sacado': fmt.definir_tipo_documento,
+        'especie_titulo': lambda x: f"{x} - {MAP_ESPECIE_TITULO.get(int(x) if str(x).isdigit() else x, '???')}"
     }),
     use_container_width=True,
     hide_index=True

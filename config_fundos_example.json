@@ -1,0 +1,16 @@
+{
+    "NOME DO FUNDO EXEMPLO": {
+        "codigo_originador": "00000000000000000000",
+        "nome_originador": "EXEMPLO",
+        "numero_banco": "173",
+        "nome_banco": "BRLTRUST",
+        "identificacao_sistema": "MX",
+        "agencia_cedente": "0001",
+        "dig_verificador": "0",
+        "conta_corrente": "000000000001",
+        "dig_verificador_cc": "0",
+        "coobrigacao": "01",
+        "identificacao_ocorrencia": "01",
+        "valor_retencao": 0
+    }
+}

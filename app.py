@@ -37,8 +37,13 @@ pagina_classificador = st.Page(
     icon="💻"
 )
 
+pagina_gerador_remessa = st.Page(
+    "pages/gerador_remessa.py",
+    title="Gerador de Remessa",
+    icon="📄"
+)
 
-pg = st.navigation([pagina_estoque, pagina_leitor_cnab, pagina_pdd, pagina_classificador])
+pg = st.navigation([pagina_estoque, pagina_leitor_cnab, pagina_pdd, pagina_classificador, pagina_gerador_remessa])
 
 
 pg.run()

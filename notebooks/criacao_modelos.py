@@ -4,11 +4,9 @@ Script de Criação e Persistência do Modelo de Classificação de Históricos.
 Execute este script sempre que quiser retreinar o modelo com novos dados.
 O modelo será salvo em: models/modelo_classificador_YYYY-MM-DD.joblib
 
-
 #RODAR SCRIPT DE TREINO .\venv\Scripts\python.exe notebooks/criacao_modelos.py
 
 #RODAR O APP ./venv/Scripts/streamlit run app.py
-
 """
 
 import re
@@ -29,9 +27,10 @@ user = os.environ['USERPROFILE']
 fundos = {
     'gerar':'gerar',
     'moovpay':'moovpay',
+    'fidara':'fidara',
 }
 
-fundo_selecionado = fundos['moovpay']
+fundo_selecionado = fundos['fidara']
 
 PATH_PLANILHA =   user+ rf'\Carmel Capital\Arquivos - Documentos\00 - CARMEL ASSET\01 - OPERACIONAL\CONTROLADORIA\01 - Relatorios Diarios\Caixa Diario\DADOS_TREINAMENTO\{fundo_selecionado}.xlsx'
 COLUNA_HISTORICO = 'Historico'
@@ -47,8 +46,8 @@ def limpar_texto(texto: str) -> str:
     if not isinstance(texto, str):
         texto = str(texto)
     texto = texto.lower()
-    texto = re.sub(r'\d+', '', texto)       # Remove números
-    texto = re.sub(r'[^\w\s]', ' ', texto)  # Remove pontuação
+    texto = re.sub(r'\d+', '', texto)        # Remove números
+    texto = re.sub(r'[^\w\s]', ' ', texto)   # Remove pontuação
     texto = " ".join(texto.split())          # Remove espaços extras
     return texto
 
