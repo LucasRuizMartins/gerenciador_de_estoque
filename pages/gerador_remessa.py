@@ -24,7 +24,7 @@ def carregar_configuracoes():
 # Inicializa/Carrega a base de dados
 CONFIG_FUNDOS = carregar_configuracoes()
 
-st.set_page_config(page_title="Gerador de Remessa CNAB 444", page_icon="📄")
+# st.set_page_config(page_title="Gerador de Remessa CNAB 444", page_icon="📄") # Removido para não conflitar com app.py
 
 st.title("📄 Gerador de Remessa CNAB 444")
 st.markdown("""

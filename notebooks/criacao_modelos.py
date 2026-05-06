@@ -31,9 +31,10 @@ fundos = {
     'housi':'housi',
     'Ene2':'Ene2',
     'cdc':'cdc',
-    'apex':'apex'
+    'apex':'apex',
+    'cobuccio_fidc':'cobuccio_fidc'
 }
-fundo_selecionado = fundos['apex']
+fundo_selecionado = fundos['cobuccio_fidc']
 
 PATH_PLANILHA =   user+ rf'\Carmel Capital\Arquivos - Documentos\00 - CARMEL ASSET\01 - OPERACIONAL\CONTROLADORIA\01 - Relatorios Diarios\Caixa Diario\DADOS_TREINAMENTO\{fundo_selecionado}.xlsx'
 COLUNA_HISTORICO = 'Historico'

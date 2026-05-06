@@ -1,7 +1,11 @@
 import streamlit as st 
 
 
-st.set_page_config(layout='wide')
+st.set_page_config(
+    page_title="Gerenciador de Estoque",
+    page_icon="📊",
+    layout='wide'
+)
 
 
 
@@ -43,7 +47,7 @@ pagina_gerador_remessa = st.Page(
     icon="📄"
 )
 
-pg = st.navigation([pagina_estoque, pagina_leitor_cnab, pagina_pdd, pagina_classificador, pagina_gerador_remessa])
+pg = st.navigation([pagina_estoque, pagina_pdd, pagina_classificador,pagina_leitor_cnab, pagina_gerador_remessa])
 
 
 pg.run()
