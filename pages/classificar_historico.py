@@ -60,6 +60,19 @@ def detectar_coluna_historico(colunas: list[str]) -> str | None:
     return None
 
 
+def detectar_coluna_data(colunas: list[str]) -> str | None:
+    """Tenta encontrar automaticamente a coluna de data.
+
+    Procura por colunas cujo nome normalizado contenha 'data' ou seja 'dt'.
+    Retorna o nome original da coluna ou None.
+    """
+    for col in colunas:
+        nome_norm = _normalizar_nome(col)
+        if 'data' in nome_norm or nome_norm == 'dt':
+            return col
+    return None
+
+
 @st.cache_data
 def listar_modelos(pasta: str) -> list[str]:
     """Escaneia a pasta models/ e retorna os arquivos .joblib ou .pkl."""
@@ -278,6 +291,24 @@ with col_upload:
                 help="Nenhuma coluna 'historico' foi detectada. Selecione manualmente."
             )
             st.warning("Nenhuma coluna com nome 'historico' foi encontrada.")
+
+        # --- DETECÇÃO AUTOMÁTICA DA COLUNA DE DATA ---
+        coluna_data_detectada = detectar_coluna_data(df.columns.tolist())
+
+        if coluna_data_detectada:
+            coluna_data_input = st.selectbox(
+                "📅 Coluna de data detectada",
+                options=df.columns.tolist(),
+                index=df.columns.tolist().index(coluna_data_detectada),
+                help="Usada para formatar as datas no resultado."
+            )
+        else:
+            coluna_data_input = st.selectbox(
+                "📅 Selecione a coluna de data",
+                options=["(Não selecionar)"] + df.columns.tolist(),
+                help="Selecione para formatar as datas no padrão brasileiro."
+            )
+
         st.info(f"Arquivo carregado: **{arquivo_excel.name}** — {len(df):,} linhas encontradas.")
         if st.session_state.get('disparar_processo', False):
             # 4. PROCESSAMENTO
@@ -292,6 +323,28 @@ with col_upload:
                 df['CLASSIFICACAO_MODELO'] = [r['palpite_modelo'] for r in resultados]
                 df['CONFIANCA'] = [r['score'] for r in resultados]
                 
+                # --- PROCESSAMENTO DE DATA ---
+                if coluna_data_input and coluna_data_input != "(Não selecionar)":
+                    try:
+                        # Converte para datetime
+                        df[coluna_data_input] = pd.to_datetime(df[coluna_data_input], errors='coerce')
+                        
+                        # Cria a nova coluna de Referência (01/mm/aaaa)
+                        nova_col_data = f"{coluna_data_input}_Ref"
+                        df[nova_col_data] = df[coluna_data_input].dt.strftime('01/%m/%Y')
+                        
+                        # Formata a original para o padrão brasileiro
+                        df[coluna_data_input] = df[coluna_data_input].dt.strftime('%d/%m/%Y')
+                        
+                        # Reposiciona a nova coluna ao lado da original
+                        colunas_ordenadas = list(df.columns)
+                        idx_orig = colunas_ordenadas.index(coluna_data_input)
+                        # Move a nova coluna para logo após a original
+                        colunas_ordenadas.insert(idx_orig + 1, colunas_ordenadas.pop(colunas_ordenadas.index(nova_col_data)))
+                        df = df[colunas_ordenadas]
+                    except Exception as e:
+                        st.warning(f"Erro ao formatar datas: {e}")
+
                 df = df.drop(columns=['_Historico_Limpo'])
 
                 # --- MESCLAGEM DÉBITO / CRÉDITO ---
@@ -397,7 +450,15 @@ with col_upload:
 
             st.divider()
             # Remove as colunas técnicas antes de gerar o download
-            df_download = df_proc.drop(columns=['CLASSIFICACAO_MODELO', 'CONFIANCA'], errors='ignore')
+            df_download = df_proc.drop(columns=['CLASSIFICACAO_MODELO', 'CONFIANCA', 'N° Trans.'], errors='ignore')
+
+            # --- ORGANIZAÇÃO FINAL: Coluna 'Saldo' por último ---
+            cols_download = list(df_download.columns)
+            col_saldo = next((c for c in cols_download if 'saldo' in _normalizar_nome(c)), None)
+            
+            if col_saldo:
+                cols_download.append(cols_download.pop(cols_download.index(col_saldo)))
+                df_download = df_download[cols_download]
             excel_bytes = converter_para_excel(df_download)
             nome_download = arquivo_excel.name.replace('.xlsx', f'_classificado.xlsx')
 

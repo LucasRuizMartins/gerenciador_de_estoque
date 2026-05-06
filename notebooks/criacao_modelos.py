@@ -34,7 +34,7 @@ fundos = {
     'apex':'apex',
     'cobuccio_fidc':'cobuccio_fidc'
 }
-fundo_selecionado = fundos['cobuccio_fidc']
+fundo_selecionado = fundos['fidara']
 
 PATH_PLANILHA =   user+ rf'\Carmel Capital\Arquivos - Documentos\00 - CARMEL ASSET\01 - OPERACIONAL\CONTROLADORIA\01 - Relatorios Diarios\Caixa Diario\DADOS_TREINAMENTO\{fundo_selecionado}.xlsx'
 COLUNA_HISTORICO = 'Historico'
@@ -108,7 +108,7 @@ print(classification_report(y_teste, previsoes))
 
 os.makedirs(PASTA_MODELOS, exist_ok=True)
 
-nome_arquivo = f"classificador_{fundo_selecionado}_{date.today().strftime('%Y-%m-%d')}.joblib"
+nome_arquivo = f"classificador_{fundo_selecionado}.joblib"
 caminho_modelo = os.path.join(PASTA_MODELOS, nome_arquivo)
 
 joblib.dump(modelo, caminho_modelo)
