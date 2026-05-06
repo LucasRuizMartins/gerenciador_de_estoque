@@ -1,11 +1,8 @@
 """
 Script de Criação e Persistência do Modelo de Classificação de Históricos.
-
 Execute este script sempre que quiser retreinar o modelo com novos dados.
 O modelo será salvo em: models/modelo_classificador_YYYY-MM-DD.joblib
-
 #RODAR SCRIPT DE TREINO .\venv\Scripts\python.exe notebooks/criacao_modelos.py
-
 #RODAR O APP ./venv/Scripts/streamlit run app.py
 """
 
@@ -28,18 +25,22 @@ fundos = {
     'gerar':'gerar',
     'moovpay':'moovpay',
     'fidara':'fidara',
+    'virtus':'virtus',
+    'sb_II':'sb_II',
+    'residence':'residence',
+    'housi':'housi',
+    'Ene2':'Ene2',
+    'cdc':'cdc',
+    'apex':'apex'
 }
-
-fundo_selecionado = fundos['fidara']
+fundo_selecionado = fundos['apex']
 
 PATH_PLANILHA =   user+ rf'\Carmel Capital\Arquivos - Documentos\00 - CARMEL ASSET\01 - OPERACIONAL\CONTROLADORIA\01 - Relatorios Diarios\Caixa Diario\DADOS_TREINAMENTO\{fundo_selecionado}.xlsx'
 COLUNA_HISTORICO = 'Historico'
 COLUNA_CATEGORIA = 'Controladoria'
 PASTA_MODELOS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models')
 
-
 # FUNÇÃO DE LIMPEZA DE TEXTO
-
 
 def limpar_texto(texto: str) -> str:
     """Normaliza o texto do histórico para o padrão esperado pelo modelo."""
