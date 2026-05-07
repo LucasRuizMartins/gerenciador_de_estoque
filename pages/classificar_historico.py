@@ -27,7 +27,6 @@ CATEGORIA_DESCONHECIDA = 'Cadastrar Nova Categoria'
 # Ajuste entre 0.0 (mais permissivo) e 2.0+ (mais restritivo)
 LIMIAR_CONFIANCA = 0.6
 
-
 # FUNÇÕES AUXILIARES
 
 def limpar_texto(texto: str) -> str:
@@ -151,9 +150,10 @@ def mesclar_debito_credito(df: pd.DataFrame) -> tuple[pd.DataFrame, str | None, 
 
     # Tratamento Nan e Mesclagem: 
     if col_debito is not None and col_credito is not None:
+        # Máscara ANTES do fillna — captura o estado original de NaN
+        mask_ambos_nan = df[col_credito].isna() & df[col_debito].isna()
         df['Lançamento (D/C)'] = df[col_credito].fillna(0) + (-df[col_debito].fillna(0))
         # Zera onde ambos eram NaN (linha sem valor nenhum)
-        mask_ambos_nan = df[col_credito].isna() & df[col_debito].isna()
         df.loc[mask_ambos_nan, 'Lançamento (D/C)'] = None
     
     # crédito fica positivo, débito vira negativo

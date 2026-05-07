@@ -1,83 +1,34 @@
-from zipfile import ZipFile 
-import streamlit as st
+"""Módulo de leitura e carregamento de dados.
+
+Fornece funções para leitura de arquivos ZIP, CSV e Excel de forma
+padronizada, incluindo processamento em chunks para grandes volumes.
+Funções compartilhadas de normalização de colunas também ficam aqui.
+"""
+
+import io
+import logging
+from zipfile import ZipFile
 import pandas as pd
-import zipfile
+import streamlit as st
 
+logger = logging.getLogger(__name__)
 
-def read_zipfile_from_buffer(uploaded_zip):
-    dfs = []
-
-    with ZipFile(uploaded_zip) as z:
-        for filename in z.namelist():
-            if filename.endswith('.csv'):
-                with z.open(filename) as f:
-                    df = pd.read_csv(f, 
-                                    encoding='ISO-8859-1',
-                                    on_bad_lines='skip', 
-                                    delimiter=';',
-                                    decimal=',', 
-                                    thousands='.',  
-                                    low_memory=False)
-                    dfs.append(df)
-    return dfs
-                    
-                    
 CHUNK_SIZE = 100_000  # linhas por chunk
 
-def processar_zip_por_chunks(caminho_zip: str, colunas: list = None):
+
+# ══════════════════════════════════════════════════════════════
+# LEITURA DE ARQUIVOS
+# ══════════════════════════════════════════════════════════════
+
+def ler_zip(file) -> pd.DataFrame:
+    """Lê todos os CSVs dentro de um ZIP e retorna um DataFrame concatenado.
+
+    Args:
+        file: Caminho do arquivo ou objeto file-like (UploadedFile, BytesIO).
+
+    Raises:
+        ValueError: Se nenhum arquivo CSV for encontrado dentro do ZIP.
     """
-    Lê cada CSV dentro do ZIP em chunks, evitando carregar tudo na RAM.
-    Retorna um generator de DataFrames.
-    """
-    with zipfile.ZipFile(caminho_zip, 'r') as z:
-        csvs = [f for f in z.namelist() if f.endswith('.csv')]
-        #st.info(f"Encontrados {len(csvs)} CSVs no ZIP")
-
-        for nome_csv in csvs:
-            with z.open(nome_csv) as arquivo:
-                # Lê em chunks — nunca carrega o CSV inteiro
-                for chunk in pd.read_csv(
-                    arquivo,
-                    chunksize=CHUNK_SIZE,
-                    encoding='ISO-8859-1',
-                    sep=";",
-                    usecols=colunas,       # só as colunas necessárias
-                    low_memory=False
-                ):
-                    yield chunk
-
-
-def agregar_chunks(caminho_zip: str, colunas: list = None):
-    """
-    Exemplo de agregação sem guardar tudo na RAM.
-    Adapte a lógica de negócio aqui.
-    """
-    total_linhas = 0
-    resultado_parcial = []
-
-    progress = st.progress(0, text="Processando...")
-    
-    chunks = list(processar_zip_por_chunks(caminho_zip, colunas))
-    total_chunks = len(chunks)
-
-    for i, chunk in enumerate(processar_zip_por_chunks(caminho_zip, colunas)):
-        total_linhas += len(chunk)
-
-        # ⚠️ Faça sua agregação AQUI — não acumule os chunks crus!
-        # Exemplo: somar por grupo
-        # parcial = chunk.groupby('coluna_chave')['valor'].sum()
-        # resultado_parcial.append(parcial)
-
-        progress.progress((i + 1) / max(total_chunks, 1), 
-                         text=f"Processando chunk {i+1} — {total_linhas:,} linhas")
-
-    st.success(f"✅ Total processado: {total_linhas:,} linhas")
-    
-    # Se precisar combinar agregações parciais:
-    # return pd.concat(resultado_parcial).groupby(level=0).sum()
-
-
-def ler_zip(file):
     dfs = []
     with ZipFile(file) as z:
         for name in z.namelist():
@@ -92,9 +43,17 @@ def ler_zip(file):
                         on_bad_lines="skip",
                         low_memory=False
                     ))
+    if not dfs:
+        raise ValueError("Nenhum arquivo CSV encontrado dentro do ZIP.")
     return pd.concat(dfs, ignore_index=True)
 
-def ler_csv(file):
+
+def ler_csv(file) -> pd.DataFrame:
+    """Lê um arquivo CSV com encoding ISO-8859-1 e separador ';'.
+
+    Args:
+        file: Caminho do arquivo ou objeto file-like.
+    """
     return pd.read_csv(
         file,
         encoding="ISO-8859-1",
@@ -105,3 +64,115 @@ def ler_csv(file):
         low_memory=False
     )
 
+
+@st.cache_data(show_spinner=False)
+def carregar_arquivo(arquivo_bytes: bytes, nome: str) -> pd.DataFrame:
+    """Lê ZIP, CSV ou XLSX e retorna um DataFrame bruto.
+
+    Função compartilhada entre páginas de análise (aquisições, liquidações, etc).
+    """
+    buf = io.BytesIO(arquivo_bytes)
+    ext = nome.rsplit(".", 1)[-1].lower()
+
+    if ext == "zip":
+        df = ler_zip(buf)
+    elif ext == "csv":
+        df = ler_csv(buf)
+    elif ext in ("xlsx", "xls"):
+        df = pd.read_excel(buf)
+    else:
+        raise ValueError(f"Formato não suportado: {ext}")
+    return df
+
+
+# ══════════════════════════════════════════════════════════════
+# NORMALIZAÇÃO DE COLUNAS
+# ══════════════════════════════════════════════════════════════
+
+def normalizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
+    """Maiúsculas + desambiguação de duplicatas com sufixo _2, _3...
+
+    1. Converte para maiúsculas e remove espaços.
+    2. Colunas repetidas recebem sufixo _2, _3...
+    3. Guarda-chuva final remove qualquer duplicata remanescente.
+    """
+    novas = []
+    contagem: dict[str, int] = {}
+    for col in df.columns:
+        nome = col.strip().upper()
+        if nome in contagem:
+            contagem[nome] += 1
+            nome = f"{nome}_{contagem[nome]}"
+        else:
+            contagem[nome] = 1
+        novas.append(nome)
+    df.columns = novas
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
+
+
+def aplicar_aliases(df: pd.DataFrame, aliases: dict[str, str]) -> pd.DataFrame:
+    """Renomeia aliases para nomes canônicos, um por vez (evita duplicatas).
+
+    Args:
+        df: DataFrame com colunas a renomear.
+        aliases: Dicionário {alias: nome_canônico}.
+    """
+    for alias, canonical in aliases.items():
+        if alias in df.columns and canonical not in df.columns:
+            df = df.rename(columns={alias: canonical})
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
+
+
+def preparar_colunas_datas(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
+    """Converte colunas de data para datetime, protegendo contra duplicatas."""
+    for col_dt in colunas:
+        if col_dt in df.columns:
+            serie = df[col_dt]
+            if isinstance(serie, pd.DataFrame):
+                serie = serie.iloc[:, 0]
+            df[col_dt] = pd.to_datetime(serie, dayfirst=True, errors="coerce")
+    return df
+
+
+def preparar_colunas_valores(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
+    """Converte colunas numéricas com formato brasileiro (ponto milhar, vírgula decimal)."""
+    for col_v in colunas:
+        if col_v in df.columns:
+            serie = df[col_v]
+            if isinstance(serie, pd.DataFrame):
+                serie = serie.iloc[:, 0]
+            df[col_v] = pd.to_numeric(
+                serie.astype(str)
+                     .str.replace(".", "", regex=False)
+                     .str.replace(",", ".", regex=False),
+                errors="coerce"
+            )
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
+
+
+# ══════════════════════════════════════════════════════════════
+# CHUNKS
+# ══════════════════════════════════════════════════════════════
+
+def processar_zip_por_chunks(caminho_zip: str, colunas: list = None):
+    """Lê cada CSV dentro do ZIP em chunks, evitando carregar tudo na RAM.
+
+    Retorna um generator de DataFrames.
+    """
+    with ZipFile(caminho_zip, 'r') as z:
+        csvs = [f for f in z.namelist() if f.endswith('.csv')]
+
+        for nome_csv in csvs:
+            with z.open(nome_csv) as arquivo:
+                for chunk in pd.read_csv(
+                    arquivo,
+                    chunksize=CHUNK_SIZE,
+                    encoding='ISO-8859-1',
+                    sep=";",
+                    usecols=colunas,
+                    low_memory=False
+                ):
+                    yield chunk

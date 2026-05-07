@@ -17,10 +17,17 @@ pagina_estoque = st.Page(
 )
 
 
-pagina_liquidados = st.Page(
-    "pages/pagina_liquidados.py", 
-    title="Dashboard Liquidações", 
-    icon="📊"
+
+pagina_liquidacoes = st.Page(
+    "pages/pagina_liquidacoes.py",
+    title="Análise de Liquidações",
+    icon="💰"
+)
+
+pagina_aquisicao = st.Page(
+    "pages/pagina_aquisicao.py",
+    title="Análise de Aquisições",
+    icon="📥"
 )
 
 pagina_leitor_cnab = st.Page(
@@ -47,7 +54,7 @@ pagina_gerador_remessa = st.Page(
     icon="📄"
 )
 
-pg = st.navigation([pagina_estoque, pagina_pdd, pagina_classificador,pagina_leitor_cnab, pagina_gerador_remessa])
+pg = st.navigation([pagina_estoque, pagina_liquidacoes, pagina_aquisicao, pagina_pdd, pagina_classificador, pagina_leitor_cnab, pagina_gerador_remessa])
 
 
 pg.run()

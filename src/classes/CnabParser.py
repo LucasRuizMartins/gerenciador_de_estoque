@@ -1,18 +1,16 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
 import pandas as pd
 
+
 class CNABParser(ABC):
-    
-    
+    """Classe base abstrata para parsers de arquivos CNAB."""
+
     def __init__(self, linhas):
         self.linhas = [l.strip() for l in linhas]
         self.header = self.linhas[0]
         self.trailer = self.linhas[-1]
         self.corpo = self.linhas[1:-1]
 
-       
-        
     @abstractmethod
     def parse_header(self):
         pass
@@ -27,4 +25,3 @@ class CNABParser(ABC):
             "body": self.parse_body(),
             "trailer": self.trailer
         }
-        

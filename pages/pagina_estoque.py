@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
-import os
+import numpy as np
 import io
-from src.classes.analise_estoque import AnaliseEstoque  
+from datetime import datetime
+from src.classes.analise_estoque import AnaliseEstoque
 
 from src.components import selector
 
@@ -147,7 +148,7 @@ if tipo_sel:
         col4.metric("PDD",            fmt(soma_metricas("valor_pdd")))
 
         #  média simples (se quiser te faço ponderada depois)
-        import numpy as np
+        import numpy as np  # TODO: já importado no topo — remover esta linha em refatoração futura
         prazo_medio = np.mean([
             mg.prazo_medio for mg in analise.metricas_globais_por_tipo.values()
         ])
@@ -165,7 +166,7 @@ if tipo_sel:
             "PDD Vencido":   [fmt(soma_faixa(f"pdd_vencido_{a}"))  for a in faixas_attr],
         })
 
-        st.dataframe(df_faixas_tipo, width='stretch', hide_index=True)
+        st.dataframe(df_faixas_tipo, use_container_width=True, hide_index=True)
 #----------------Filtro
     else:
         mg = analise.metricas_globais_por_tipo[tipo_sel]
@@ -190,7 +191,7 @@ if tipo_sel:
             "PDD Vencido":   [fmt(getattr(mv_t, f"pdd_vencido_{a}", 0))  for a in faixas_attr],
         })
 
-        st.dataframe(df_faixas_tipo, width='stretch', hide_index=True)
+        st.dataframe(df_faixas_tipo, use_container_width=True, hide_index=True)
         
 
 
@@ -204,8 +205,6 @@ st.dataframe(df_cedentes, use_container_width=True, hide_index=True)
 st.subheader("📋 Recebíveis por Tipo")
 df_recebiveis = analise.obter_recebiveis_agrupados()
 
-colunas_numericas = ['VALOR_PRESENTE','VALOR_NOMINAL','VALOR_AQUISICAO']
-
 df_recebiveis['VALOR_PRESENTE'] = df_recebiveis['VALOR_PRESENTE'].apply(hmz)
 df_recebiveis['VALOR_NOMINAL'] = df_recebiveis['VALOR_NOMINAL'].apply(hmz)
 df_recebiveis['VALOR_AQUISICAO'] = df_recebiveis['VALOR_AQUISICAO'].apply(hmz)
@@ -214,18 +213,12 @@ st.dataframe(df_recebiveis, use_container_width=True, hide_index=True)
 
 # ── Exportar Excel ─────────────────────────────────────────────
 st.subheader("💾 Exportar")
-from datetime import datetime
-
-data_atual = datetime.now().strftime("%d_%m_%Y")
-nome_base = m.nome_fundo.split()[0] #arquivo_selecionado.name.split('.')[0]
-nome_arquivo = f"relatorio_{nome_base}_{data_atual}.xlsx"
-
-buffer = io.BytesIO()
-analise.exportar_para_excel(buffer)
-buffer.seek(0)
-
 
 if st.button("📥 Gerar arquivo"):
+    data_atual = datetime.now().strftime("%d_%m_%Y")
+    nome_base = m.nome_fundo.split()[0]
+    nome_arquivo = f"relatorio_{nome_base}_{data_atual}.xlsx"
+
     buffer = io.BytesIO()
     sucesso = analise.exportar_para_excel(buffer)
 
@@ -239,4 +232,4 @@ if st.button("📥 Gerar arquivo"):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.error("Erro ao gerar arquivo")
+        st.error("Erro ao gerar arquivo")

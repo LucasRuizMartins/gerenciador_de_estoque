@@ -1,14 +1,14 @@
 import pandas as pd
 import os
 from datetime import datetime, date
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 from src.global_var import MAP_ESPECIE_TITULO
 
 class CNABFormatter:
     """Utilitários de formatação para arquivos CNAB."""
 
     @staticmethod
-    def num(valor: any, tamanho: int, decimais: int = 0) -> str:
+    def num(valor: Any, tamanho: int, decimais: int = 0) -> str:
         """Campo numérico: alinhado à direita, zeros à esquerda."""
         if valor is None or (isinstance(valor, float) and pd.isna(valor)):
             valor = 0
@@ -18,7 +18,7 @@ class CNABFormatter:
         return str(valor).zfill(tamanho)[-tamanho:]
 
     @staticmethod
-    def alfa(valor: any, tamanho: int) -> str:
+    def alfa(valor: Any, tamanho: int) -> str:
         """Campo alfanumérico: maiúsculo, sem acento, alinhado à esquerda."""
         if valor is None or (isinstance(valor, float) and pd.isna(valor)):
             valor = ""
@@ -213,9 +213,9 @@ class CNAB444Converter:
         linhas.append(self.montar_header(self.config["nr_sequencial_arquivo"]))
         
         # Detalhes
-        for i, row in df.iterrows():
+        for i, row_dict in enumerate(df.to_dict('records')):
             seq = i + 2
-            linhas.append(self.montar_detalhe(row.to_dict(), seq))
+            linhas.append(self.montar_detalhe(row_dict, seq))
             
         # Trailer
         linhas.append(self.montar_trailer(len(linhas) + 1))

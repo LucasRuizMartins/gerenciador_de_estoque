@@ -1,12 +1,9 @@
 import streamlit as st
 import pandas as pd
-import zipfile
-import os
-from io import BytesIO
-from src import data_loader
-from src import global_var
-from src.components import selector
 from datetime import datetime
+from src.classes.CnabParserFactory import CNABParserFactory
+from src.classes.Formater import Formater as fmt
+from src.global_var import MAP_OCORRENCIA, MAP_ESPECIE_TITULO
 from src.classes.CnabParserFactory import CNABParserFactory
 from src.classes.Formater import Formater as fmt
 from src.global_var import MAP_OCORRENCIA, MAP_ESPECIE_TITULO
@@ -81,11 +78,11 @@ with col2:
 st.write("### Resumo de Ocorrências no Arquivo")
 col1, col2, col3, col4, col5,col6 = st.columns(6)
 
-col1.metric("Total Títulos", f"{len(df):}")
+col1.metric("Total Títulos", f"{len(df):,}")
 col2.metric("Valor Nominal Total", fmt.format_br(df['valor_nominal'].sum()))
 col3.metric("Valor Pago Total", fmt.format_br(df['valor_pago'].sum()))
 col4.metric("Valor Presente Total", fmt.format_br(df['valor_presente'].sum()))
-col5.metric("Contagem de Sacados", f"{df['doc_sacado'].nunique():}")
+col5.metric("Contagem de Sacados", f"{df['doc_sacado'].nunique():,}")
 col6.metric("Contagem de Cedentes", f"{df['cedente'].nunique():,}")
 
 

@@ -1,18 +1,19 @@
+import logging
 import pandas as pd
-import numpy as np 
+import numpy as np
 from zipfile import ZipFile
 import humanize
 import statistics
-from zipfile import ZipFile
 from typing import Dict, Optional, Iterator
 from dataclasses import dataclass, field
-import gc
 import tempfile
 import os
 import io
-from src.metricas import MetricasGlobais  
-from src.metricas import MetricasVencimento 
-from src.metricas import MetricasMensais  
+from src.metricas import MetricasGlobais
+from src.metricas import MetricasVencimento
+from src.metricas import MetricasMensais
+
+logger = logging.getLogger(__name__)
 
 humanize.activate("pt_BR")
 
@@ -32,6 +33,30 @@ class AnaliseEstoque:
     ]    
     
     CHUNK_SIZE = 500_000
+
+    FAIXAS_A_VENCER = [
+        ('a_vencer_0_15', 0, 15),
+        ('a_vencer_16_30', 16, 30),
+        ('a_vencer_31_60', 31, 60),
+        ('a_vencer_61_90', 61, 90),
+        ('a_vencer_91_120', 91, 120),
+        ('a_vencer_121_150', 121, 150),
+        ('a_vencer_151_180', 151, 180),
+        ('a_vencer_181_360', 181, 360),
+        ('a_vencer_acima_360', 361, None),
+    ]
+
+    FAIXAS_VENCIDO = [
+        ('vencido_0_15', -15, -1),
+        ('vencido_16_30', -30, -16),
+        ('vencido_31_60', -60, -31),
+        ('vencido_61_90', -90, -61),
+        ('vencido_91_120', -120, -91),
+        ('vencido_121_150', -150, -121),
+        ('vencido_151_180', -180, -151),
+        ('vencido_181_360', -360, -181),
+        ('vencido_acima_360', None, -361),
+    ]
 
     DTYPE_MAP = {
         'TIPO_RECEBIVEL': 'category',
@@ -69,13 +94,14 @@ class AnaliseEstoque:
             else:
                 caminho = arquivo  # já é path
 
-            print(f"Iniciando processamento de {caminho}...")
+            logger.info("Iniciando processamento de %s...", caminho)
             self._processar_arquivo_chunks(caminho)
             self._finalizar_calculos()
-            print("Processamento concluído com sucesso!")
+            logger.info("Processamento concluído com sucesso!")
 
         except Exception as e:
-            (f"Erro ao processar arquivo: {e}")
+            logger.error("Erro ao processar arquivo: %s", e)
+            raise
         
     
     def _inicializar_metricas(self) -> None:
@@ -115,20 +141,17 @@ class AnaliseEstoque:
     def _processar_arquivo_chunks(self, path: str) -> None:
         """Processa arquivo em chunks para economizar memória."""
         self._determinar_data_referencia(path)
-        print(f"Data de referência identificada: {self.data_ref.strftime('%Y-%m-%d')}")
+        logger.info("Data de referência identificada: %s", self.data_ref.strftime('%Y-%m-%d'))
         
         chunk_iterator = self._obter_chunk_iterator(path)
         
         for chunk_num, chunk in enumerate(chunk_iterator, 1):
             if chunk_num % 10 == 0:
-                print(f"Processando chunk {chunk_num}...")
+                logger.debug("Processando chunk %d...", chunk_num)
             
             chunk = self._preparar_chunk(chunk)
             self._processar_chunk(chunk)
             del chunk
-            
-            if chunk_num % 20 == 0:
-                gc.collect()
     
     def _determinar_data_referencia(self, path: str) -> None:
         """Determina a data de referência usando apenas o primeiro registro válido."""
@@ -182,7 +205,7 @@ class AnaliseEstoque:
         with ZipFile(path) as z:
             for filename in z.namelist():
                 if filename.endswith('.csv'):
-                    print(f"Processando arquivo: {filename}")
+                    logger.info("Processando arquivo: %s", filename)
                     with z.open(filename) as f:
                         yield from pd.read_csv(
                             f,
@@ -235,7 +258,8 @@ class AnaliseEstoque:
         
         if 'PRAZO' in chunk.columns and 'VALOR_AQUISICAO' in chunk.columns:
             chunk['PRAZO_MEDIO'] = (chunk['VALOR_AQUISICAO'] * chunk['PRAZO']).astype('float64')
-            chunk['TAXA_DE_CESSAO'] = taxa_anual = ((chunk['VALOR_NOMINAL'] / chunk['VALOR_AQUISICAO']) ** (252 / chunk['PRAZO']) - 1) * 100
+            prazo_safe = chunk['PRAZO'].replace(0, np.nan)
+            chunk['TAXA_DE_CESSAO'] = ((chunk['VALOR_NOMINAL'] / chunk['VALOR_AQUISICAO']) ** (252 / prazo_safe) - 1) * 100
      
 
         
@@ -368,47 +392,23 @@ class AnaliseEstoque:
         mv = self.metricas_vencimento
         
         # Faixas A vencer (Valor Presente)
-        faixas_a_vencer = [
-            ('a_vencer_0_15', 0, 15),
-            ('a_vencer_16_30', 16, 30),
-            ('a_vencer_31_60', 31, 60),
-            ('a_vencer_61_90', 61, 90),
-            ('a_vencer_91_120', 91, 120),
-            ('a_vencer_121_150', 121, 150),
-            ('a_vencer_151_180', 151, 180),
-            ('a_vencer_181_360', 181, 360),
-            ('a_vencer_acima_360', 361, None),
-        ]
-        
-        for attr, prazo_min, prazo_max in faixas_a_vencer:
+        for attr, prazo_min, prazo_max in self.FAIXAS_A_VENCER:
             valor = self._somar_vencimento(chunk, prazo_min, prazo_max, 'A vencer', 'VALOR_PRESENTE')
             setattr(mv, attr, getattr(mv, attr) + valor)
         
         # Faixas Vencido (Valor Presente)
-        faixas_vencido = [
-            ('vencido_0_15', -15, -1),
-            ('vencido_16_30', -30, -16),
-            ('vencido_31_60', -60, -31),
-            ('vencido_61_90', -90, -61),
-            ('vencido_91_120', -120, -91),
-            ('vencido_121_150', -150, -121),
-            ('vencido_151_180', -180, -151),
-            ('vencido_181_360', -360, -181),
-            ('vencido_acima_360', None, -361),
-        ]
-        
-        for attr, prazo_min, prazo_max in faixas_vencido:
+        for attr, prazo_min, prazo_max in self.FAIXAS_VENCIDO:
             valor = self._somar_vencimento(chunk, prazo_min, prazo_max, 'Vencido', 'VALOR_PRESENTE')
             setattr(mv, attr, getattr(mv, attr) + valor)
         
         # PDD A vencer
-        for attr, prazo_min, prazo_max in faixas_a_vencer:
+        for attr, prazo_min, prazo_max in self.FAIXAS_A_VENCER:
             attr_pdd = f'pdd_{attr}'
             valor = self._somar_vencimento(chunk, prazo_min, prazo_max, 'A vencer', 'VALOR_PDD')
             setattr(mv, attr_pdd, getattr(mv, attr_pdd) + valor)
         
         # PDD Vencido
-        for attr, prazo_min, prazo_max in faixas_vencido:
+        for attr, prazo_min, prazo_max in self.FAIXAS_VENCIDO:
             attr_pdd = f'pdd_{attr}'
             valor = self._somar_vencimento(chunk, prazo_min, prazo_max, 'Vencido', 'VALOR_PDD')
             setattr(mv, attr_pdd, getattr(mv, attr_pdd) + valor)
@@ -716,7 +716,7 @@ class AnaliseEstoque:
         for tipo in self.metricas_mensais_por_tipo.keys():
             self._finalizar_calculos_por_tipo(tipo)
         
-        print(f"\nMétricas calculadas para {len(self.metricas_mensais_por_tipo)} tipos de recebível")
+        logger.info("Métricas calculadas para %d tipos de recebível", len(self.metricas_mensais_por_tipo))
     
     def _mediana_ratio(self,valores, taxas):
         pares = [(v, t) for v, t in zip(valores, taxas) if t not in (0, None)]
@@ -728,8 +728,8 @@ class AnaliseEstoque:
     def _calcular_metricas_globais_finais(self) -> None:
         m = self.metricas_globais
 
-        self.total_sacados = len(self.sacados_acum)
-        self.total_cedentes = len(self.cedentes_acum)
+        m.total_sacados = len(self.sacados_acum)
+        m.total_cedentes = len(self.cedentes_acum)
 
         self._calcular_tickets_medios(m)
         self._calcular_tickets_medios_ultima_quinzena(m)
@@ -844,7 +844,7 @@ class AnaliseEstoque:
         # Calcula medianas dos valores de aquisição divididas pela mediana da taxa
         # Só calcula se a mediana da taxa for maior que zero para evitar divisão por zero
 
-        print(f"mg.mediana_taxa_cessao - {mg.mediana_taxa_cessao}")
+        logger.debug("mg.mediana_taxa_cessao = %s", mg.mediana_taxa_cessao)
         if mg.mediana_taxa_media > 0:
             if tipo in self._todos_valores_aquisicao_por_tipo and self._todos_valores_aquisicao_por_tipo[tipo]:
                 mg.mediana_valor_aquisicao = statistics.median(self._todos_valores_aquisicao_por_tipo[tipo]) / statistics.median(self._todas_taxas_cessao_por_tipo[tipo]) #mg.mediana_taxa_media
@@ -903,7 +903,7 @@ class AnaliseEstoque:
                 df_relatorio = self._construir_dataframe_relatorio()
 
                 if df_relatorio.empty:
-                    print("DataFrame principal vazio!")
+                    logger.warning("DataFrame principal vazio!")
 
                 df_relatorio.to_excel(writer, sheet_name='Relatório Consolidado', index=False)
                 self._formatar_planilha_excel(writer, df_relatorio)
@@ -921,7 +921,7 @@ class AnaliseEstoque:
             return True
 
         except Exception as e:
-            print(f"Erro na exportação: {e}")
+            logger.error("Erro na exportação: %s", e)
         return False
   
     
@@ -1204,24 +1204,4 @@ class AnaliseEstoque:
         except Exception as e: # 'Exception' com E maiúsculo e sem erro de grafia
             print(f"Erro na formatação: {e}")
             return "R$ 0,00"
-    
-def salvar(path,df):
-    if path:
-        output_excel_path = path
-        if not output_excel_path.lower().endswith('.xlsx'):
-            output_excel_path += '.xlsx'
-        if df:
-            if df.exportar_para_excel(output_excel_path):
-               print(f"Dados exportados com sucesso para: {output_excel_path}")
-            else:
-                print("Erro ao exportar dados para Excel.")                 
-        else:
-          print("Nenhum dado para exportar. Carregue um arquivo primeiro.")           
-    else:
-        print("Nenhum local de salvamento selecionado.")
-        
-        
-    def exportar_para_excel(self, destino):
-        with pd.ExcelWriter(destino, engine="xlsxwriter") as writer:
-            self.df.to_excel(writer, index=False)
-            # outras abas se tiver
+    

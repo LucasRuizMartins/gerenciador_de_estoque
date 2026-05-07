@@ -1,6 +1,6 @@
 from datetime import datetime
 import pandas as pd 
-from src.classes.CnabPaser import CNABParser
+from src.classes.CnabParser import CNABParser
 
 class SingulareParser(CNABParser):
 
