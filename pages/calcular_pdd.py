@@ -45,10 +45,14 @@ if st.button("🚀 Processar"):
         df_pdd_processado = criar_dataframe_pdd(df_estoque) # Criando o dataframe
         
         # Salva tudo no session_state
-        st.session_state["pdd_resultado"] = resultado
-        st.session_state["df_pdd"] = df_pdd_processado 
-        st.session_state["pdd_data_ref"] = df_estoque["DATA_REFERENCIA"].iloc[0]
-        st.session_state["filtrar_wop"] = filtrar_wop_toggle
+        if not df_estoque.empty:
+            st.session_state["pdd_resultado"] = resultado
+            st.session_state["df_pdd"] = df_pdd_processado 
+            st.session_state["pdd_data_ref"] = df_estoque["DATA_REFERENCIA"].iloc[0] if "DATA_REFERENCIA" in df_estoque.columns else "N/A"
+            st.session_state["filtrar_wop"] = filtrar_wop_toggle
+        else:
+            st.error("❌ O arquivo processado está vazio ou não contém as colunas necessárias.")
+            st.stop()
 
 # Só segue se AMBOS existirem no estado da sessão
 if "pdd_resultado" not in st.session_state or "df_pdd" not in st.session_state:

@@ -15,8 +15,6 @@ from src.metricas import MetricasMensais
 
 logger = logging.getLogger(__name__)
 
-humanize.activate("pt_BR")
-
 
 class AnaliseEstoque:
     """
@@ -718,11 +716,12 @@ class AnaliseEstoque:
         
         logger.info("Métricas calculadas para %d tipos de recebível", len(self.metricas_mensais_por_tipo))
     
-    def _mediana_ratio(self,valores, taxas):
-        pares = [(v, t) for v, t in zip(valores, taxas) if t not in (0, None)]
+    def _mediana_ratio(self, valores, taxas):
+        # Invertido: agora garante que v (aquisição) não é zero para calcular taxa / aquisição
+        pares = [(v, t) for v, t in zip(valores, taxas) if v not in (0, None)]
         if not pares:
             return None
-        ratios = [v / t for v, t in pares]
+        ratios = [t / v for v, t in pares]
         return statistics.median(ratios)
     
     def _calcular_metricas_globais_finais(self) -> None:
@@ -841,23 +840,28 @@ class AnaliseEstoque:
         else:
             mg.mediana_taxa_media = 0
         
-        # Calcula medianas dos valores de aquisição divididas pela mediana da taxa
-        # Só calcula se a mediana da taxa for maior que zero para evitar divisão por zero
-
-        logger.debug("mg.mediana_taxa_cessao = %s", mg.mediana_taxa_cessao)
-        if mg.mediana_taxa_media > 0:
-            if tipo in self._todos_valores_aquisicao_por_tipo and self._todos_valores_aquisicao_por_tipo[tipo]:
-                mg.mediana_valor_aquisicao = statistics.median(self._todos_valores_aquisicao_por_tipo[tipo]) / statistics.median(self._todas_taxas_cessao_por_tipo[tipo]) #mg.mediana_taxa_media
+        # Calcula medianas da taxa divididas pela mediana do valor de aquisição (taxa / aquisição)
+        # Só calcula se a mediana do valor for maior que zero para evitar divisão por zero
+        if tipo in self._todos_valores_aquisicao_por_tipo and self._todos_valores_aquisicao_por_tipo[tipo]:
+            mediana_aq = statistics.median(self._todos_valores_aquisicao_por_tipo[tipo])
+            if mediana_aq > 0:
+                mg.mediana_valor_aquisicao = mg.mediana_taxa_cessao / mediana_aq
+            else:
+                mg.mediana_valor_aquisicao = 0
             
-            if tipo in self._todos_valores_aquisicao_vencido_por_tipo and self._todos_valores_aquisicao_vencido_por_tipo[tipo]:
-                mg.mediana_vencido = statistics.median(self._todos_valores_aquisicao_vencido_por_tipo[tipo]) / statistics.median(self._todas_taxas_cessao_por_tipo[tipo]) #mg.mediana_taxa_media
+        if tipo in self._todos_valores_aquisicao_vencido_por_tipo and self._todos_valores_aquisicao_vencido_por_tipo[tipo]:
+            mediana_aq_v = statistics.median(self._todos_valores_aquisicao_vencido_por_tipo[tipo])
+            if mediana_aq_v > 0:
+                mg.mediana_vencido = mg.mediana_taxa_cessao / mediana_aq_v
+            else:
+                mg.mediana_vencido = 0
             
-            if tipo in self._todos_valores_aquisicao_a_vencer_por_tipo and self._todos_valores_aquisicao_a_vencer_por_tipo[tipo]:
-                mg.mediana_a_vencer = statistics.median(self._todos_valores_aquisicao_a_vencer_por_tipo[tipo]) /statistics.median(self._todas_taxas_cessao_por_tipo[tipo]) #mg.mediana_taxa_media
-        else:
-            mg.mediana_valor_aquisicao = 0
-            mg.mediana_vencido = 0
-            mg.mediana_a_vencer = 0
+        if tipo in self._todos_valores_aquisicao_a_vencer_por_tipo and self._todos_valores_aquisicao_a_vencer_por_tipo[tipo]:
+            mediana_aq_av = statistics.median(self._todos_valores_aquisicao_a_vencer_por_tipo[tipo])
+            if mediana_aq_av > 0:
+                mg.mediana_a_vencer = mg.mediana_taxa_cessao / mediana_aq_av
+            else:
+                mg.mediana_a_vencer = 0
     
     # ==================== MÉTODOS PÚBLICOS ====================
     
@@ -1174,34 +1178,6 @@ class AnaliseEstoque:
         # Largura da coluna de métricas
         worksheet.set_column(0, 0, 40)
     
-    @staticmethod
-    def formatar_numero(valor: float) -> str:
-        """Formata valor para padrão monetário brasileiro."""
-        return f"{valor:,.0f}".replace(",", ".")
-    
-    @staticmethod
-    def formatar_moeda(valor: float) -> str:
-        """Formata valor para padrão monetário brasileiro."""
-        return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    
-    @staticmethod
-    def formatar_percentual(valor: float) -> str:
-        """Formata valor para percentual brasileiro."""
-        return f"{valor*100:,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
-    
-    @staticmethod
-    def formatar_pl_humano(valor):
-        try:
-            # 1. Garante que o valor seja numérico (float/int)
-            valor_num = pd.to_numeric(valor, errors='coerce')
-            
-            if pd.isna(valor_num) or valor_num == 0:
-                return "R$ 0,00"                
-            # 2. Transforma 1.000.000 em "1,0 milhão"
-            res = humanize.intword(valor_num)
-            return f"R$ {res}"
-            
-        except Exception as e: # 'Exception' com E maiúsculo e sem erro de grafia
-            print(f"Erro na formatação: {e}")
-            return "R$ 0,00"
+
+
     

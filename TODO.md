@@ -89,25 +89,26 @@
 
 ---
 
-## 🔲 Fase 6 — Melhorias Adicionais (NOVAS SUGESTÕES)
+## ✅ Fase 6 — Melhorias Adicionais (CONCLUÍDA)
 
 ### Robustez
-- [ ] Adicionar `try/except` nos parsers CNAB (`SingulareParser.parse_body`) — campos `float()` sem proteção podem levantar `ValueError`
-- [ ] Adicionar validação de colunas em `analise_pdd.py:processar_pdd()` antes de acessar `SITUACAO_RECEBIVEL`, `FAIXA_PDD`, `VALOR_PDD`
-- [ ] Adicionar guard clause em `calcular_pdd.py:54` — `df_estoque["DATA_REFERENCIA"].iloc[0]` pode gerar `IndexError` se DataFrame vazio
+- [x] Adicionar `try/except` nos parsers CNAB (`SingulareParser.parse_body`) — Adicionado `_safe_float` e docstrings
+- [x] Adicionar validação de colunas em `analise_pdd.py:processar_pdd()` antes de acessar colunas críticas
+- [x] Adicionar guard clause em `calcular_pdd.py:54` para evitar `IndexError` em DF vazio
 
 ### Padronização
-- [ ] Remover formatadores duplicados que ainda restam **dentro** de `AnaliseEstoque` (L.1180-1210: `formatar_moeda`, `formatar_numero`, `formatar_percentual`, `formatar_pl_humano`) — substituir por `from src.formatting import ...`
-- [ ] Remover `formata_numero()` de `src/funcoes.py` (duplicata de `fmt_pl_humano`)
-- [ ] Verificar se `mensagem_sucesso()` em `funcoes.py` ainda é usada; se não, deletar
+- [x] Remover formatadores duplicados em `AnaliseEstoque` (L.1180-1210) — migrado para `src.formatting`
+- [x] Remover `formata_numero()` de `src/funcoes.py` (duplicata)
+- [x] Verificar e deletar `mensagem_sucesso()` em `funcoes.py` (não utilizada)
 
 ### Configuração e Logging
-- [ ] Adicionar `logging.basicConfig()` no `app.py` para configurar nível de log centralizadamente
-- [ ] Configurar `humanize` locale uma única vez (atualmente feito em `analise_estoque.py` e `formatting.py`)
+- [x] Adicionar `logging.basicConfig()` no `app.py` centralizadamente
+- [x] Configurar `humanize` locale uma única vez no `app.py`
 
 ### Documentação
-- [ ] Adicionar docstrings nas classes de parser CNAB
-- [ ] Documentar o fluxo de dados: Upload → data_loader → classes → Streamlit display
+- [x] Adicionar docstrings nas classes de parser CNAB (`CnabParser`, `SingulareParser`, `CnabParserFactory`)
+- [x] Documentar o fluxo de dados: Upload → data_loader → classes → Streamlit display
+
 
 ---
 

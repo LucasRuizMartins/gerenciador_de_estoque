@@ -80,21 +80,46 @@ def ordenar_pdd(df, faixas):
 
 
 def processar_pdd(df_estoque, usar_vagao, faixas, filtrar_wop=True):
-    COLUNAS = [
+    """
+    Processa a PDD (Provisão para Devedores Duvidosos) com base em faixas de atraso.
+    Permite agrupamento por 'Vagão' (Sacado) para considerar o pior atraso do sacado para todos os seus títulos.
+    """
+    if df_estoque is None or df_estoque.empty:
+        return pd.DataFrame()
+
+    COLUNAS_NECESSARIAS = [
+        "SITUACAO_RECEBIVEL", "VALOR_PDD", "PRAZO_ATUAL",
+        "VALOR_AQUISICAO", "VALOR_NOMINAL", "VALOR_PRESENTE"
+    ]
+    
+    # Verifica se as colunas essenciais existem
+    ausentes = [c for c in COLUNAS_NECESSARIAS if c not in df_estoque.columns]
+    if ausentes:
+        # Se faltar colunas críticas, retorna vazio para evitar erro de acesso
+        return pd.DataFrame()
+
+    if filtrar_wop and "FAIXA_PDD" in df_estoque.columns:
+        df_estoque = df_estoque[df_estoque['FAIXA_PDD'] != 'WOP']
+    
+    # Colunas para o DataFrame de trabalho
+    colunas_finais = [
         "DOC_SACADO", "SEU_NUMERO", "SITUACAO_RECEBIVEL",
         "NU_DOCUMENTO", "VALOR_PDD", "PRAZO_ATUAL",
         "VALOR_AQUISICAO", "VALOR_NOMINAL", "VALOR_PRESENTE", "DATA_REFERENCIA"
     ]
-    if filtrar_wop and "FAIXA_PDD" in df_estoque.columns:
-        df_estoque = df_estoque[df_estoque['FAIXA_PDD'] !='WOP']
-    df = df_estoque[[c for c in COLUNAS if c in df_estoque.columns]].copy()
+    df = df_estoque[[c for c in colunas_finais if c in df_estoque.columns]].copy()
 
-    # Garantir tipos
-    df["PRAZO_ATUAL"] = pd.to_numeric(df["PRAZO_ATUAL"], errors="coerce")
-    df["VALOR_PRESENTE"] = pd.to_numeric(df["VALOR_PRESENTE"], errors="coerce")
+    # Garantir tipos numéricos
+    df["PRAZO_ATUAL"] = pd.to_numeric(df["PRAZO_ATUAL"], errors="coerce").fillna(0)
+    df["VALOR_PRESENTE"] = pd.to_numeric(df["VALOR_PRESENTE"], errors="coerce").fillna(0)
+    df["VALOR_NOMINAL"] = pd.to_numeric(df["VALOR_NOMINAL"], errors="coerce").fillna(0)
+    df["VALOR_AQUISICAO"] = pd.to_numeric(df["VALOR_AQUISICAO"], errors="coerce").fillna(0)
+    df["VALOR_PDD"] = pd.to_numeric(df["VALOR_PDD"], errors="coerce").fillna(0)
+
+    # Categorização inicial
     df["FAIXA_PDD"] = df["PRAZO_ATUAL"].apply(lambda x: categorizar_prazo(x, faixas))
 
-    if usar_vagao:
+    if usar_vagao and "DOC_SACADO" in df.columns:
         df = df.groupby("DOC_SACADO").agg(
             VALOR_AQUISICAO=("VALOR_AQUISICAO", "sum"),
             VALOR_NOMINAL=("VALOR_NOMINAL", "sum"),
@@ -106,19 +131,19 @@ def processar_pdd(df_estoque, usar_vagao, faixas, filtrar_wop=True):
 
         df["FAIXA_PDD"] = df["PRAZO_ATUAL"].apply(lambda x: categorizar_prazo(x, faixas))
 
-    # Agrupamento final
-    df_final = df.groupby("FAIXA_PDD").agg(
-        VALOR_AQUISICAO=("VALOR_AQUISICAO", "sum"),
-        VALOR_NOMINAL=("VALOR_NOMINAL", "sum"),
-        VALOR_PRESENTE=("VALOR_PRESENTE", "sum"),
-        VALOR_PDD=("VALOR_PDD", "sum"),
-        DATA_REFERENCIA=("DATA_REFERENCIA", "first")
-    ).reset_index()
+    # Agrupamento por Faixa
+    agg_dict = {
+        "VALOR_AQUISICAO": "sum",
+        "VALOR_NOMINAL": "sum",
+        "VALOR_PRESENTE": "sum",
+        "VALOR_PDD": "sum",
+        "DATA_REFERENCIA": "first"
+    }
+    
+    df_final = df.groupby("FAIXA_PDD").agg(**{k: (k, v) for k, v in agg_dict.items()}).reset_index()
 
-    # Percentual
+    # Percentual e cálculo de PDD teórica
     df_final["% PDD"] = df_final["FAIXA_PDD"].apply(lambda x: percentual_pdd(x, faixas))
-
-    # Cálculo
     df_final["PDD POR FAIXA"] = df_final["VALOR_PRESENTE"] * df_final["% PDD"]
 
     # Linha total
@@ -130,24 +155,21 @@ def processar_pdd(df_estoque, usar_vagao, faixas, filtrar_wop=True):
         "VALOR_PDD": df_final["VALOR_PDD"].sum(),
         "% PDD": np.nan,
         "PDD POR FAIXA": df_final["PDD POR FAIXA"].sum(),
-        "DATA_REFERENCIA": df_final["DATA_REFERENCIA"].iloc[0],
+        "DATA_REFERENCIA": df_final["DATA_REFERENCIA"].iloc[0] if not df_final.empty else None,
     }
 
     df_final = pd.concat([df_final, pd.DataFrame([total])], ignore_index=True)
 
-    # 🔥 AQUI entra a lógica de ordenação correta
+    # Ordenação
     df_total = df_final[df_final["FAIXA_PDD"] == "Total"]
     df_sem_total = df_final[df_final["FAIXA_PDD"] != "Total"]
 
-    df_sem_total = ordenar_pdd(df_sem_total, faixas)
+    if not df_sem_total.empty:
+        df_sem_total = ordenar_pdd(df_sem_total, faixas)
 
     df_final = pd.concat([df_sem_total, df_total], ignore_index=True)
 
     return df_final
-
-
-
-
 
 def criar_dataframe_pdd(df):
     atraso_vp = df[df['SITUACAO_RECEBIVEL'] == 'Vencido']['VALOR_PRESENTE'].sum()

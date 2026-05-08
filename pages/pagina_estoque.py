@@ -2,12 +2,25 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
+import os
 from datetime import datetime
 from src.classes.analise_estoque import AnaliseEstoque
 
 from src.components import selector
 
 st.title("📊 Análise de Estoque de Recebíveis")
+
+# --- Memorial de Cálculos ---
+caminho_pdf = "docs/CALCULOS.pdf"
+if os.path.exists(caminho_pdf):
+    with open(caminhi_pdf := caminho_pdf, "rb") as f:
+        st.download_button(
+            label="📑 Memorial de Cálculos",
+            data=f,
+            file_name="Memorial_de_Calculos.pdf",
+            mime="application/pdf",
+            help="Baixar PDF com as regras e fórmulas de cálculo"
+        )
 
 selector.componente_upload_processamento("Faça o upload do arquivo de estoque",
                                          AnaliseEstoque,
@@ -23,10 +36,12 @@ m  = analise.metricas_globais
 mm = analise.metricas_mensais
 mv = analise.metricas_vencimento
 
-fmt = AnaliseEstoque.formatar_moeda
-pct = AnaliseEstoque.formatar_percentual
-hmz = AnaliseEstoque.formatar_pl_humano
-nmr = AnaliseEstoque.formatar_numero
+from src.formatting import fmt_moeda, fmt_numero, fmt_pct, fmt_pl_humano
+
+fmt = fmt_moeda
+pct = fmt_pct
+hmz = fmt_pl_humano
+nmr = fmt_numero
 
 # ── Header ────────────────────────────────────────────────────
 st.header(f"🏦 {m.nome_fundo}")
@@ -42,8 +57,8 @@ col4.metric("PDD",                    fmt(m.valor_pdd))
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("A Vencer",       fmt(m.valor_a_vencer))
 col2.metric("Vencido",        fmt(m.valor_vencido))
-col3.metric("Total Sacados",  f"{nmr(analise.total_sacados)}")
-col4.metric("Total Cedentes", f"{nmr(analise.total_cedentes)}")
+col3.metric("Total Sacados",  f"{nmr(m.total_sacados)}")
+col4.metric("Total Cedentes", f"{nmr(m.total_cedentes)}")
 
 # ── Quantidades ────────────────────────────────────────────────
 st.subheader("📜 Títulos")
@@ -232,4 +247,4 @@ if st.button("📥 Gerar arquivo"):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.error("Erro ao gerar arquivo")
+        st.error("Erro ao gerar arquivo")

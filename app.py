@@ -1,5 +1,16 @@
 import streamlit as st 
+import logging
+import humanize
 
+# Configuração central de logs
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Configuração central de localização
+humanize.activate("pt_BR")
 
 st.set_page_config(
     page_title="Gerenciador de Estoque",

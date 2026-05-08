@@ -100,3 +100,23 @@ def test_analise_estoque_filtro_fundo(sample_estoque_csv):
     """Verifica se o nome do fundo é capturado."""
     analise = AnaliseEstoque(sample_estoque_csv)
     assert analise.metricas_globais.nome_fundo == 'Fundo Alpha'
+
+def test_analise_estoque_medianas(sample_estoque_csv):
+    """Verifica se o cálculo das medianas segue a lógica (taxa / aquisição)."""
+    analise = AnaliseEstoque(sample_estoque_csv)
+    mg = analise.metricas_globais
+    
+    # Na lógica global (_mediana_ratio), o cálculo é t / v
+    # Vamos verificar um dos tipos para simplificar
+    duplicata_mg = analise.metricas_globais_por_tipo['Duplicata']
+    
+    # Para Duplicata no sample:
+    # Row 1: Aquisição 900, Yield calculado ~482.0
+    # Row 3: Aquisição 1800, Yield calculado ~1700.0
+    # A mediana deve seguir mg.mediana_taxa_cessao / statistics.median([900, 1800])
+    
+    mediana_aq = (900 + 1800) / 2
+    esperado = duplicata_mg.mediana_taxa_cessao / mediana_aq
+    
+    assert duplicata_mg.mediana_valor_aquisicao == pytest.approx(esperado, rel=1e-4)
+
