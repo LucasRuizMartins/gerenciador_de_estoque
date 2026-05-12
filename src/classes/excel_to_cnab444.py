@@ -109,15 +109,24 @@ def especie_titulo(tipo):
         "CONFISSAO DE DIVIDA": "62",
         "FATURA CARTAO":     "65",
         "FATURA DE CARTAO CREDITO": "65",
+        "CCB DIGITAL":       "41",
+        "CCB PRE DIGITAL":   "70",
+        "CCB PRE BALCAO":    "71",
+        "CCB PRE CETIP":     "72",
+        "OUTROS":            "73",
+        "CCB FORMALIZACAO FONADA": "74",
     }
 
-
-
-    
-    
     if tipo is None or (isinstance(tipo, float) and pd.isna(tipo)):
         return "01"
+        
     chave = str(tipo).upper().strip()
+    
+    # Se o usuário passou algo como "41 - CCB DIGITAL" ou apenas "41"
+    primeira_parte = chave.split('-')[0].strip().split()[0]
+    if primeira_parte.isdigit():
+        return primeira_parte.zfill(2)[:2]
+        
     chave = ''.join(c if c.isalnum() or c == ' ' else ' ' for c in chave)
     return mapa.get(chave, "01")
 
@@ -136,28 +145,28 @@ def valida_linha(linha):
 def monta_header(cfg, data_gravacao=None):
     if data_gravacao is None:
         data_gravacao = datetime.today().strftime("%d%m%y")
-
     linha = (
         "0"                                         # 1    pos 1      Identificação Registro
         + "1"                                       # 2    pos 2      Ident. Arquivo Remessa
-        + alfa("Remessa", 7)                        # 3-9  pos 3-9    Literal Remessa
+        + alfa("REMESSA", 7)                        # 3-9  pos 3-9    Literal Remessa
         + "01"                                      # 4    pos 10-11  Código Serviço
-        + alfa("Cobranca", 15)                      # 5    pos 12-26  Literal Serviço
-        + num(cfg["codigo_originador"], 20)         # 6    pos 27-46  Código Originador
-        + alfa(cfg["nome_originador"], 30)          # 7    pos 47-76  Nome Originador
-        + num(cfg["numero_banco"], 3)               # 8    pos 77-79  Número Banco
-        + alfa(cfg["nome_banco"], 15)               # 9    pos 80-94  Nome Banco
+        + alfa("COBRANCA", 15)                      # 5    pos 12-26  Literal Serviço
+        + num(cfg.get("codigo_originador", 0), 20)  # 6    pos 27-46  Código Originador
+        + alfa(cfg.get("nome_originador", ""), 30)  # 7    pos 47-76  Nome Originador
+        + num(cfg.get("numero_banco", 0), 3)        # 8    pos 77-79  Número Banco
+        + alfa(cfg.get("nome_banco", ""), 15)       # 9    pos 80-94  Nome Banco
         + data_gravacao                             # 10   pos 95-100 Data Gravação
         + alfa("", 8)                               # 11   pos 101-108 Branco
-        + alfa(cfg["identificacao_sistema"], 2)     # 12   pos 109-110 Ident. Sistema
-        + num(cfg["nr_sequencial_arquivo"], 7)      # 13   pos 111-117 Nº Seq. Arquivo
-        + alfa("", 2)                               # 14   pos 118-119 Branco
-        + num(cfg["valor_retencao"], 10)            # 15   pos 120-129 Valor Retenção
-        + num(cfg["codigo_banco_dep"], 3)           # 16   pos 130-132 Código Banco
-        + num(cfg["agencia_deposito"], 4)           # 17   pos 133-136 Agência Depósito
-        + num(cfg["conta_corrente"], 14)            # 18   pos 137-150 Conta Corrente
-        + alfa("", 288)                             # 19   pos 151-438 Branco
-        + "000001"                                  # 20   pos 439-444 Nº Seq. Registro
+        + alfa(cfg.get("identificacao_sistema", "MX"), 2) # 12   pos 109-110 Ident. Sistema
+        + num(cfg.get("nr_sequencial_arquivo", 1), 7) # 13   pos 111-117 Nº Seq. Arquivo
+        + num(cfg.get("numero_banco", 0), 3)        # 14   pos 118-120 Número do banco (cedente)
+        + num(cfg.get("agencia_deposito", 0), 5)    # 15   pos 121-125 Agência (cedente)
+        + num(0, 1)                                 # 16   pos 126    DV Agência
+        + num(cfg.get("conta_corrente", 0), 12)     # 17   pos 127-138 Conta Corrente
+        + num(0, 1)                                 # 18   pos 139    DV Conta Corrente
+        + num(cfg.get("taxa", 0), 4)                # 19   pos 140-143 Taxa
+        + alfa("", 295)                             # 20   pos 144-438 Branco
+        + "000001"                                  # 21   pos 439-444 Nº Seq. Registro
     )
     return valida_linha(linha)
 
@@ -170,7 +179,7 @@ def monta_detalhe(row, cfg, seq):
     doc_sacado    = row.get("DOC_SACADO", "")
     nome_cedente  = row.get("NOME_CEDENTE", "")
     doc_cedente   = row.get("DOC_CEDENTE", "")
-    tipo_rec      = row.get("TIPO_RECEBIVEL", "")
+    tipo_rec      = row.get("TIPO_RECEBIVEL") or row.get("Tipo Recebivel", "")
     valor_pago    = row.get("Valor Pago", 0) or 0
     valor_nominal = row.get("VALOR_NOMINAL", 0) or 0
     valor_pres    = row.get("VALOR_PRESENTE", 0) or 0
@@ -197,20 +206,23 @@ def monta_detalhe(row, cfg, seq):
 
     linha = (
         "1"                                             # 1   pos 1       Ident. Registro
-        + alfa("", 19)                                  # 2   pos 2-20    Débito Automático C/C
-        + cfg["coobrigacao"]                            # 3   pos 21-22   Coobrigação
-        + "00"                                          # 4   pos 23-24   Característica Especial
-        + "0000"                                        # 5   pos 25-28   Modalidade Operação
-        + "00"                                          # 6   pos 29-30   Natureza Operação
-        + "0000"                                        # 7   pos 31-34   Origem Recurso
+        + num(0, 6)                                     # 2   pos 2-7     Data Carencia (Zeros)
+        + cfg.get("tipo_juros", " ")                    # 3   pos 8       Tipo Juros
+        + "  "                                          # 4   pos 9-10    Branco
+        + num(cfg.get("taxa_juros", 0), 10)             # 5   pos 11-20   Taxa Juros
+        + cfg.get("coobrigacao", "02")                  # 6   pos 21-22   Coobrigação
+        + "00"                                          # 5   pos 23-24   Característica Especial
+        + "0000"                                        # 6   pos 25-28   Modalidade Operação
+        + "00"                                          # 7   pos 29-30   Natureza Operação
+        + "0000"                                        # 8   pos 31-34   Origem Recurso
         + alfa("", 2)                                   # 8   pos 35-36   Classe Risco
         + "0"                                           # 9   pos 37      Zeros
         + alfa(str(seu_numero), 25)                     # 10  pos 38-62   Nº Controle Participante
-        + "000"                                         # 11  pos 63-65   Número Banco
+        + num(cfg.get("banco", 0), 3)                   # 11  pos 63-65   Número Banco
         + "00000"                                       # 12  pos 66-70   Zeros
-        + "00000000000"                                 # 13  pos 71-81   Ident. Título Banco
+        + "00000000000"                                 # 13  pos 71-81   Ident. Título Banco   
         + " "                                           # 14  pos 82      Dígito Nosso Número
-        + num(valor_pago, 10, decimais=2)               # 15  pos 83-92   Valor Pago
+        + num(valor_pago, 10, decimais=2)               # 15  pos 83-92   Valor Pago    
         + " "                                           # 16  pos 93      Condição Emissão
         + " "                                           # 17  pos 94      Ident. Débito Aut.
         + formata_data(dt_venc)                         # 18  pos 95-100  Data Liquidação

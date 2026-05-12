@@ -52,6 +52,7 @@ class SingulareParser(CNABParser):
                     'sacado': linha[234:274].strip(),
                     'doc_sacado': linha[220:234].strip(),
                     'tipo_sacado': linha[218:220].strip(),
+                    'data_aquisicao': linha[173:179].strip(),
                 }
                 lista.append(registro)
             except Exception as e:

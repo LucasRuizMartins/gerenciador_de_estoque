@@ -10,14 +10,14 @@ O projeto é dividido em páginas especializadas para cada etapa da operação:
 
 ### 🏦 Remessas e CNAB
 *   **Gerador de Remessa (`gerador_remessa.py`):** Interface para converter planilhas Excel no padrão CNAB 444, com seleção dinâmica de fundos e edição de ocorrências.
-*   **Validador de CNAB (`validador_cnab.py`):** Leitor técnico de arquivos `.REM` ou `.RET`, apresentando KPIs financeiros e tradução de códigos bancários.
+*   **Validador de CNAB (`validador_cnab.py`):** Leitor técnico de arquivos `.REM` ou `.RET`. Agora com **Inteligência Financeira**: detecta automaticamente se o arquivo é de Cessão ou Liquidação, calcula taxas implícitas (a.m. e a.a.) por título e permite simular o impacto de novas taxas no Valor Presente (VP).
 
 ### 📈 Análise de Risco e Carteira
 *   **Cálculo de PDD (`calcular_pdd.py`):** Interface para processamento de arquivos de histórico e cálculo automático de Provisão para Devedores Duvidosos (PDD) baseada em atrasos.
 *   **Página de Estoque (`pagina_estoque.py`):** Visualização gerencial da carteira atual, permitindo filtros por cedente, vencimento e status.
 *   **Página de Liquidados (`pagina_liquidados.py`):** Relatório detalhado de títulos liquidados, ideal para conciliação bancária e análise de performance.
 
-### 💰 Análise Operacional de Recebíveis *(Novo)*
+### 💰 Análise Operacional de Recebíveis
 *   **Análise de Liquidações (`pagina_liquidacoes.py`):** Dashboard para análise de recebíveis liquidados. Suporta upload de ZIP, CSV e XLSX. Exibe KPIs globais (valor de aquisição, vencimento, pago e retorno), agrupamentos por situação, cedente, mês de vencimento e mês de aquisição. Inclui mapeamento automático de nomes alternativos de colunas e proteção robusta contra colunas duplicadas.
 *   **Análise de Aquisições (`pagina_aquisicao.py`):** Dashboard para análise do pipeline de aquisições. Apresenta KPIs de deságio, breakdown por tipo de recebível, ranking dos top 20 sacados, e evolução mensal por data de entrada e vencimento. Mesmo mecanismo de normalização de colunas da página de liquidações.
 
@@ -38,8 +38,15 @@ A lógica de negócio está encapsulada em classes robustas dentro de `src/class
 *   **`SingulareParser`:** Especialização do leitor para o layout da administradora Singulare.
 
 ### 📐 Inteligência de Negócio
-*   **`AnaliseEstoque`:** Classe responsável por realizar cálculos complexos sobre a carteira, como agrupamentos por cedente e cálculos de duration.
-*   **`AnalisePDD`:** Implementa as regras de provisionamento financeiro, transformando dias de atraso em valores de reserva técnica.
+*   **`AnaliseEstoque`**: Classe orquestradora (Facade) que coordena o processamento de grandes volumes de dados de carteira.
+    *   **`ChunkReader`**: Motor de leitura otimizada em chunks para CSV, Excel e ZIP.
+    *   **`MetricasAggregator`**: Centraliza o cálculo de KPIs, tickets médios e medianas de rentabilidade.
+    *   **`ExcelExporter`**: Gerencia a geração de relatórios formatados em `.xlsx`.
+*   **`AnalisePDD`**: Implementa as regras de provisionamento financeiro, transformando dias de atraso em valores de reserva técnica.
+*   **`AnaliseCNAB`**: Motor de análise financeira para arquivos CNAB.
+    *   **Taxa de Equilíbrio (Breakeven)**: Calcula a taxa exata que iguala o montante da carteira via método iterativo.
+    *   **Simulação de Impacto**: Projeta variações no Valor Presente baseadas em mudanças de taxa.
+    *   **Conversão Temporal**: Traduz taxas entre as bases mensal (a.m.) e anual (a.a.).
 
 ### 🔧 Utilitários
 *   **`Formater`:** Classe central de formatação. Centraliza a lógica de limpeza de documentos (CPF/CNPJ), formatação de moedas e padronização de datas para o padrão bancário.
@@ -54,13 +61,17 @@ A lógica de negócio está encapsulada em classes robustas dentro de `src/class
 │   ├── validador_cnab.py        # Leitura e auditoria de CNAB
 │   ├── calcular_pdd.py          # Cálculo de provisão (risco)
 │   ├── pagina_estoque.py        # Dashboard de títulos ativos
-│   ├── pagina_liquidacoes.py    # Análise de recebíveis liquidados  ← NOVO
-│   ├── pagina_aquisicao.py      # Análise de pipeline de aquisições ← NOVO
+│   ├── pagina_liquidacoes.py    # Análise de recebíveis liquidados  
+│   ├── pagina_aquisicao.py      # Análise de pipeline de aquisições 
 │   └── classificar_historico.py # Classificação de dados brutos
 ├── src/                         # Core da Aplicação
 │   ├── classes/                 # Motores de Cálculo e Conversores
+│   │   ├── analise_estoque.py   # Orquestrador da análise de carteira
+│   │   ├── chunk_reader.py      # Leitor de dados em chunks 
+│   │   ├── metricas_aggregator.py # Calculador de métricas 
+│   │   ├── excel_exporter.py    # Exportador de relatórios 
+│   │   ├── analise_pdd.py       # Cálculo de risco
 │   │   ├── cnab444_converter.py
-│   │   ├── AnalisePDD.py
 │   │   ├── SingulareParser.py
 │   │   └── Formater.py
 │   ├── components/
@@ -124,6 +135,20 @@ pytest tests/unit/
 ---
 
 ## 📝 Changelog
+
+### v — 08/05/2026
+
+#### Refatoração da Análise de Estoque
+- **Decomposição Modular**: A classe `AnaliseEstoque` foi refatorada para o padrão Facade, delegando responsabilidades para `ChunkReader`, `MetricasAggregator` e `ExcelExporter`.
+- **Melhoria de Manutenibilidade**: Redução de complexidade no motor principal e isolamento da lógica de leitura e exportação.
+
+#### Inteligência Financeira em CNABs
+- **Novo Módulo `analise_cnab.py`**: Motor matemático para auditoria de taxas e simulações financeiras.
+- **Auditoria de Taxas no Validador**: Exibição de taxas implícitas individuais por título em base mensal e anual.
+- **Cálculo de Breakeven**: Implementação de busca iterativa para encontrar a taxa de equilíbrio real da carteira (precisão de 4 casas decimais).
+- **Simulador de Taxas**: Ferramenta interativa para projetar o impacto de novos deságios no Valor Presente Total.
+- **Automação de Finalidade**: O sistema detecta automaticamente se o arquivo é de **Cessão** ou **Liquidação** analisando as ocorrências e códigos de baixa.
+- **Base de Cálculo Flexível**: Ajuste para utilizar a Data da Operação (Header) como referência temporal única.
 
 ### v — 06/05/2026
 

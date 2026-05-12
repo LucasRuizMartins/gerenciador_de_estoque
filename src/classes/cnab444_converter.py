@@ -40,6 +40,30 @@ class CNABFormatter:
         return valor[:tamanho].ljust(tamanho)
 
     @staticmethod
+    def alfa_num(valor: Any, tamanho: int) -> str:
+        """Campo alfanumérico: limpa caracteres e preenche com ZEROS à ESQUERDA."""
+        if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+            valor = ""
+        
+        # Limpeza básica (reaproveitando lógica de alfa)
+        valor = str(valor).upper().strip()
+        replacements = {
+            'Á':'A','À':'A','Â':'A','Ã':'A','Ä':'A',
+            'É':'E','È':'E','Ê':'E','Ë':'E',
+            'Í':'I','Ì':'I','Î':'I','Ï':'I',
+            'Ó':'O','Ò':'O','Ô':'O','Õ':'O','Ö':'O',
+            'Ú':'U','Ù':'U','Û':'U','Ü':'U',
+            'Ç':'C','Ñ':'N',
+        }
+        for k, v in replacements.items():
+            valor = valor.replace(k, v)
+        
+        valor = ''.join(c if c.isalnum() or c in '.-/,' else '' for c in valor)
+        
+        # Preenche com zeros à esquerda
+        return valor.zfill(tamanho)[-tamanho:]
+
+    @staticmethod
     def data(valor: any) -> str:
         """Formata data para DDMMAA de forma robusta."""
         if valor is None or (isinstance(valor, float) and pd.isna(valor)):
@@ -98,7 +122,13 @@ class CNAB444Converter:
     def _get_especie(self, tipo: str) -> str:
         if not tipo or pd.isna(tipo):
             return "01"
+            
         chave = str(tipo).upper().strip()
+        
+        primeira_parte = chave.split('-')[0].strip().split()[0]
+        if primeira_parte.isdigit():
+            return primeira_parte.zfill(2)[:2]
+            
         chave = ''.join(c if c.isalnum() or c == ' ' else ' ' for c in chave)
         return self.mapa_especies.get(chave, "01")
 
@@ -132,7 +162,8 @@ class CNAB444Converter:
             + f.num(c.get("dig_verificador", 0), 1)     # 125-125
             + f.num(c.get("conta_corrente", 0), 12)     # 126-137
             + f.num(c.get("dig_verificador_cc", 0), 1)  # 138-138
-            + f.alfa("", 300)                           # 139-438 (Aumentado de 299 para 300 para fechar 444)
+            + f.num(c.get("taxa", 0), 4)                # 139-142 Taxa
+            + f.alfa("", 296)                           # 143-438 Branco
             + "000001"                                  # 439-444
         )
         return self._valida_linha(linha)
@@ -147,7 +178,10 @@ class CNAB444Converter:
 
         linha = (
             "1"                                             # 1
-            + f.alfa("", 19)                                # 2-20
+            + f.num(0, 6)                                   # 2-7 Data Carencia
+            + f.num(c.get("tipo_juros", 0), 1)              # 8 Tipo Juros
+            + "  "                                          # 9-10 Branco
+            + f.num(c.get("taxa_juros", 0), 10)             # 11-20 Taxa Juros
             + c["coobrigacao"]                              # 21-22
             + "00"                                          # 23-24
             + "0000"                                        # 25-28
@@ -155,7 +189,7 @@ class CNAB444Converter:
             + "0000"                                        # 31-34
             + f.alfa("", 2)                                 # 35-36
             + "0"                                           # 37
-            + f.alfa(str(row.get("SEU_NUMERO", "")), 25)    # 38-62
+            + f.alfa_num(str(row.get("SEU_NUMERO", "")), 25) # 38-62
             + "000"                                         # 63-65
             + "00000"                                       # 66-70
             + "00000000000"                                 # 71-81
@@ -163,13 +197,13 @@ class CNAB444Converter:
             + f.num(row.get("VALOR_PAGO", 0), 10, 2)        # 83-92
             + " "                                           # 93
             + " "                                           # 94
-            + f.data(row.get("DATA_VENCIMENTO_AJUSTADA"))   # 95-100
+            + f.data(row.get("DATA_LIQUIDACAO", None))      # 95-100 (Liquidação)
             + f.alfa("", 4)                                 # 101-104
             + " "                                           # 105
-            + "0"                                           # 106
+            + " "                                           # 106 (Branco - End Aviso)
             + f.alfa("", 2)                                 # 107-108
             + f.num(row.get("IDENTIFICACAO_OCORRENCIA", c["identificacao_ocorrencia"]), 2) # 109-110
-            + f.alfa(str(row.get("NU_DOCUMENTO", "")), 10)  # 111-120
+            + f.alfa_num(str(row.get("NU_DOCUMENTO", "")), 10) # 111-120
             + f.data(row.get("DATA_VENCIMENTO_AJUSTADA"))   # 121-126
             + f.num(row.get("VALOR_NOMINAL", 0), 13, 2)     # 127-139
             + "000"                                         # 140-142
@@ -180,8 +214,8 @@ class CNAB444Converter:
             + "00"                                          # 157-158
             + "0"                                           # 159
             + self._get_tipo_pessoa(row.get("DOC_CEDENTE")) # 160-161
-            + "000000000000"                                # 162-173
-            + f.alfa(f.data(row.get("DATA_AQUISICAO")), 19) # 174-192
+            + f.alfa("", 12)                                # 162-173 (Juros/Mora X(12))
+            + f.alfa(str(row.get("TERMO_CESSAO", row.get("DATA_AQUISICAO", ""))), 19) # 174-192
             + f.num(row.get("VALOR_AQUISICAO", 0), 13, 2)   # 193-205
             + f.num(0, 13, 2)                               # 206-218
             + self._get_tipo_pessoa(row.get("DOC_SACADO"))  # 219-220

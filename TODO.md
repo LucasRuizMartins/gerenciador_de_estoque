@@ -79,13 +79,13 @@
 - [x] Validar que métricas permanecem idênticas após refatoração
 - [x] **EXTRA**: Corrigido bug em `AnaliseEstoque` onde `total_cedentes` e `total_sacados` eram retornados como 0.
 
-### 4.1.2 — Executar decomposição
-- [ ] Criar `src/classes/chunk_reader.py`
-- [ ] Criar `src/classes/metricas_aggregator.py`
-- [ ] Criar `src/classes/excel_exporter.py`
-- [ ] Refatorar `AnaliseEstoque` como orquestrador
-- [ ] Atualizar imports em `pagina_estoque.py`
-- [ ] Rodar testes para validar
+### 4.1.2 — Executar decomposição (CONCLUÍDA)
+- [x] Criar `src/classes/chunk_reader.py`
+- [x] Criar `src/classes/metricas_aggregator.py`
+- [x] Criar `src/classes/excel_exporter.py`
+- [x] Refatorar `AnaliseEstoque` como orquestrador (Facade)
+- [x] Validar interface pública para evitar alteração em `pagina_estoque.py`
+- [x] Rodar testes para validar (5/5 testes passando)
 
 ---
 

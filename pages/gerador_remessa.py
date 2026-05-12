@@ -197,9 +197,10 @@ if arquivo_excel:
                 linhas = converter.converter(df_final)
                 conteudo = converter.get_conteudo(linhas)
                 
-                # Nome do arquivo sugerido: CB + DDMMAA + Seq
+                # Nome do arquivo sugerido: CB + DDMMAA + Seq + Nome do Fundo
                 data_hoje = datetime.today().strftime("%d%m%y")
-                nome_sugerido = f"CB{data_hoje}{int(config['nr_sequencial_arquivo']):02d}.REM"
+                nome_fundo_limpo = fundo_selecionado.replace(" ", "_").upper()
+                nome_sugerido = f"CB{data_hoje}{int(config['nr_sequencial_arquivo']):02d}_{nome_fundo_limpo}.REM"
                 
                 st.info(f"✅ Remessa gerada com {len(linhas)-2} registros de detalhe.")
                 
