@@ -3,6 +3,7 @@ import numpy as np
 import statistics
 from typing import Dict, Optional
 import logging
+# pyrefly: ignore [missing-import]
 from src.metricas import MetricasGlobais, MetricasMensais, MetricasVencimento
 
 logger = logging.getLogger(__name__)

@@ -8,7 +8,9 @@ Mantido para não quebrar imports existentes como:
 import re
 from datetime import datetime
 import pandas as pd
+# pyrefly: ignore [missing-import]
 from src.global_var import MAP_CEDENTE
+# pyrefly: ignore [missing-import]
 from src.formatting import (
     fmt_moeda,
     fmt_numero,

@@ -9,9 +9,12 @@ from dataclasses import dataclass, field
 import tempfile
 import os
 import io
-# from src.metricas import MetricasGlobais
-# from src.metricas import MetricasVencimento
-# from src.metricas import MetricasMensais
+# pyrefly: ignore [missing-import]
+from src.classes.chunk_reader import ChunkReader
+# pyrefly: ignore [missing-import]
+from src.classes.metricas_aggregator import MetricasAggregator
+# pyrefly: ignore [missing-import]
+from src.classes.excel_exporter import ExcelExporter
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +28,6 @@ class AnaliseEstoque:
     # Constantes de configuração
 
     def __init__(self, arquivo):
-        # from src.classes.chunk_reader import ChunkReader
-        # from src.classes.metricas_aggregator import MetricasAggregator
-        
         try:
             if hasattr(arquivo, "read"):
                 arquivo.seek(0)
@@ -111,7 +111,6 @@ class AnaliseEstoque:
     
     def exportar_para_excel(self, output) -> bool:
         """Exporta métricas para Excel (arquivo ou buffer)."""
-        # from src.classes.excel_exporter import ExcelExporter
         exporter = ExcelExporter(self)
         return exporter.exportar(output)
     

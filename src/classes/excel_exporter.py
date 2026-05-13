@@ -1,5 +1,6 @@
 import pandas as pd
 import logging
+# pyrefly: ignore [missing-import]
 from src.metricas import MetricasGlobais, MetricasMensais, MetricasVencimento
 
 logger = logging.getLogger(__name__)

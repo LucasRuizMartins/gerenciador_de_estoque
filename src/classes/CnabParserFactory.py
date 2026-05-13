@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from src.classes.SingulareParser import SingulareParser
 
 
@@ -28,4 +29,4 @@ class CNABParserFactory:
         # elif "outro_admin" in administrador:
         #     return OutroParser(linhas)
 
-        raise ValueError(f"Padrão de cnab não suportado: {caracteres}")
+        raise ValueError(f"Padrão de cnab não suportado: {caracteres}")

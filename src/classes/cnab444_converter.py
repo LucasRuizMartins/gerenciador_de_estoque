@@ -2,6 +2,7 @@ import pandas as pd
 import os
 from datetime import datetime, date
 from typing import Dict, List, Optional, Union, Any
+# pyrefly: ignore [missing-import]
 from src.global_var import MAP_ESPECIE_TITULO
 
 class CNABFormatter:

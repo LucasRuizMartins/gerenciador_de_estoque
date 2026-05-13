@@ -1,5 +1,6 @@
 from datetime import datetime
 import pandas as pd 
+# pyrefly: ignore [missing-import]
 from src.classes.CnabParser import CNABParser
 
 class SingulareParser(CNABParser):
