@@ -1,4 +1,4 @@
-# --- Dev / Docs ---
+#------- Dev / Docs
 mkdocs
 pip
 python-dotenv
@@ -6,7 +6,7 @@ ruff
 pytest
 pytest-mock
 
-# --- Data ---
+#------- Data
 pandas
 numpy
 openpyxl
@@ -14,7 +14,7 @@ xlsxwriter
 humanize
 plotly
 
-# --- Machine Learning ---
+#------- Machine Learning
 scikit-learn
 scipy
 joblib

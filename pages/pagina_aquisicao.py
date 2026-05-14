@@ -11,7 +11,9 @@ Permite ao usuário:
 
 import pandas as pd
 import streamlit as st
+# pyrefly: ignore [missing-import]
 from src.data_loader import carregar_arquivo, normalizar_colunas, aplicar_aliases, preparar_colunas_datas, preparar_colunas_valores
+# pyrefly: ignore [missing-import]
 from src.formatting import fmt_moeda, fmt_numero, fmt_pct
 
 # ── Constantes de colunas ──────────────────────────────────────
@@ -210,6 +212,7 @@ c3.metric("📑 Tipos",           fmt_numero(n_tipos))
 # ══════════════════════════════════════════════════════════════
 # TABELAS AGRUPADAS
 # ══════════════════════════════════════════════════════════════
+# pyrefly: ignore [missing-import]
 from src.components.tables import agrupar_e_exibir, agrupar_por_mes
 
 # Specs de agregação reutilizáveis

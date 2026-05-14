@@ -1,9 +1,13 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+# pyrefly: ignore [missing-import]
 from src.classes.CnabParserFactory import CNABParserFactory
+# pyrefly: ignore [missing-import]
 from src.classes.Formater import Formater as fmt
+# pyrefly: ignore [missing-import]
 from src.global_var import MAP_OCORRENCIA, MAP_ESPECIE_TITULO
+# pyrefly: ignore [missing-import]
 import src.classes.analise_cnab as ac
 
 st.title("📄 Leitor de Arquivo CNAB")
@@ -51,13 +55,11 @@ elif not tem_baixa and tipo_arquivo == "Cessão (Aquisição)":
 st.markdown("---")
 
 # ── Processamento de Datas e Taxas ────────────────
-df['dt_venc'] = pd.to_datetime(df['data_vencimento'], format='%d%m%y', errors='coerce')
-
-# Base de cálculo: Data da Operação do Header (ignorando data_aquisicao individual)
-df['dt_aq'] = header['data_operacao']
+df['data_vencimento'] = pd.to_datetime(df['data_vencimento'], format='%d%m%y', errors='coerce')
+df['data_aquisicao'] = pd.to_datetime(df['data_aquisicao'], format='%d%m%y', errors='coerce').fillna(header['data_operacao'])
 
 # Cálculo do prazo (em dias) e taxas
-df['prazo'] = (df['dt_venc'] - df['dt_aq']).dt.days
+df['prazo'] = (df['data_vencimento'] - df['data_aquisicao']).dt.days
 df['prazo'] = df['prazo'].apply(lambda x: max(x, 1)) # Mínimo 1 dia para evitar divisão por zero
 
 df['taxa_am'] = df.apply(
@@ -100,9 +102,6 @@ contagem_esp.columns = ['Código','Quantidade']
 # Converte código string para int para bater com o MAP_ESPECIE_TITULO
 contagem_esp['Descrição'] = contagem_esp['Código'].apply(lambda x: MAP_ESPECIE_TITULO.get(int(x) if str(x).isdigit() else x, "Desconhecido"))
 contagem_esp = contagem_esp[['Código','Descrição','Quantidade']]
-
-
-
 
 col1,col2 = st.columns(2)
 with col1:
@@ -166,7 +165,8 @@ st.dataframe(
         'valor_nominal': 'R$ {:,.2f}',
         'valor_pago': 'R$ {:,.2f}',
         'valor_presente': 'R$ {:,.2f}',
-        'data_vencimento': fmt.format_cnab_data,
+        'data_aquisicao': lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else "-",
+        'data_vencimento': lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else "-",
         'doc_cedente': fmt.format_documento,
         'tipo_cedente': fmt.definir_tipo_documento,
         'doc_sacado': fmt.format_documento,

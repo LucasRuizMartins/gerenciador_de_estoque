@@ -38,8 +38,6 @@ def ler_zip(file) -> pd.DataFrame:
                         f,
                         encoding="ISO-8859-1",
                         delimiter=";",
-                        decimal=",",
-                        thousands=".",
                         on_bad_lines="skip",
                         low_memory=False
                     ))
@@ -58,8 +56,6 @@ def ler_csv(file) -> pd.DataFrame:
         file,
         encoding="ISO-8859-1",
         delimiter=";",
-        decimal=",",
-        thousands=".",
         on_bad_lines="skip",
         low_memory=False
     )
@@ -126,29 +122,76 @@ def aplicar_aliases(df: pd.DataFrame, aliases: dict[str, str]) -> pd.DataFrame:
 
 
 def preparar_colunas_datas(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
-    """Converte colunas de data para datetime, protegendo contra duplicatas."""
+    """Converte colunas de data para datetime, protegendo contra duplicatas e inversão de mês/dia.
+    Otimizado para performance vetorial.
+    """
     for col_dt in colunas:
         if col_dt in df.columns:
             serie = df[col_dt]
             if isinstance(serie, pd.DataFrame):
                 serie = serie.iloc[:, 0]
-            df[col_dt] = pd.to_datetime(serie, dayfirst=True, errors="coerce")
+            
+            # Se já for datetime, apenas remove timezone
+            if pd.api.types.is_datetime64_any_dtype(serie):
+                df[col_dt] = pd.to_datetime(serie).dt.tz_localize(None)
+                continue
+                
+            # Para strings, detecta padrões ISO vs BR de forma vetorial
+            s = serie.astype(str).str.strip()
+            if s.empty:
+                continue
+
+            # Regex rápido para identificar ISO (YYYY-MM-DD)
+            is_iso = s.str.contains(r"^\d{4}-\d{2}-\d{2}", regex=True, na=False)
+            
+            res = pd.Series(pd.NaT, index=serie.index)
+            
+            # Processa ISO e BR separadamente para usar dayfirst correto em cada grupo
+            if is_iso.any():
+                res[is_iso] = pd.to_datetime(s[is_iso], dayfirst=False, errors="coerce")
+            
+            if (~is_iso).any():
+                res[~is_iso] = pd.to_datetime(s[~is_iso], dayfirst=True, errors="coerce")
+
+            df[col_dt] = res
     return df
 
 
 def preparar_colunas_valores(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
-    """Converte colunas numéricas com formato brasileiro (ponto milhar, vírgula decimal)."""
+    """Converte colunas numéricas com formato brasileiro (ponto milhar, vírgula decimal).
+    Otimizado para performance vetorial.
+    """
     for col_v in colunas:
         if col_v in df.columns:
             serie = df[col_v]
             if isinstance(serie, pd.DataFrame):
                 serie = serie.iloc[:, 0]
-            df[col_v] = pd.to_numeric(
-                serie.astype(str)
-                     .str.replace(".", "", regex=False)
-                     .str.replace(",", ".", regex=False),
-                errors="coerce"
-            )
+            
+            # Se já for numérico, apenas garante float
+            if pd.api.types.is_numeric_dtype(serie):
+                df[col_v] = pd.to_numeric(serie, errors="coerce")
+                continue
+
+            # Se for string, limpa símbolos e decide o separador decimal
+            s = serie.astype(str).str.replace(r"[R$\s]", "", regex=True).str.strip()
+            
+            # Heurística: se tem ambos . e ,
+            # BR: 1.234,56 -> ponto antes da vírgula
+            # US: 1,234.56 -> vírgula antes do ponto
+            mask_both = s.str.contains(r"\..*,", regex=True, na=False)
+            mask_us_both = s.str.contains(r",.*\.", regex=True, na=False)
+            mask_comma_only = s.str.contains(",", na=False) & ~mask_both & ~mask_us_both
+            
+            s_clean = s.copy()
+            if mask_both.any():
+                s_clean.loc[mask_both] = s.loc[mask_both].str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+            if mask_us_both.any():
+                s_clean.loc[mask_us_both] = s.loc[mask_us_both].str.replace(",", "", regex=False)
+            if mask_comma_only.any():
+                s_clean.loc[mask_comma_only] = s.loc[mask_comma_only].str.replace(",", ".", regex=False)
+
+            df[col_v] = pd.to_numeric(s_clean, errors="coerce")
+            
     df = df.loc[:, ~df.columns.duplicated()]
     return df
 
