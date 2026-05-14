@@ -121,9 +121,9 @@ ausentes = [c for c in COLUNAS_ESPERADAS if c not in df.columns]
 if ausentes:
     st.warning(f"⚠️ Colunas não encontradas: `{'`, `'.join(ausentes)}`")
 
-# ══════════════════════════════════════════════════════════════
+ 
 # FILTROS LATERAIS
-# ══════════════════════════════════════════════════════════════
+ 
 with st.sidebar:
     st.header("🔎 Filtros")
 
@@ -182,9 +182,9 @@ if periodo_entrada and len(periodo_entrada) == 2 and COL_ENTRADA in df_f.columns
 if periodo_venc and len(periodo_venc) == 2 and COL_DT_VENC in df_f.columns:
     df_f = df_f[df_f[COL_DT_VENC].dt.date.between(periodo_venc[0], periodo_venc[1])]
 
-# ══════════════════════════════════════════════════════════════
+ 
 # KPIs GLOBAIS
-# ══════════════════════════════════════════════════════════════
+ 
 st.divider()
 st.subheader("📊 KPIs Globais")
 
@@ -209,9 +209,9 @@ c1.metric("👤 Sacados Únicos",  fmt_numero(n_sacados))
 c2.metric("🏢 Cedentes Únicos", fmt_numero(n_cedentes))
 c3.metric("📑 Tipos",           fmt_numero(n_tipos))
 
-# ══════════════════════════════════════════════════════════════
+ 
 # TABELAS AGRUPADAS
-# ══════════════════════════════════════════════════════════════
+ 
 # pyrefly: ignore [missing-import]
 from src.components.tables import agrupar_e_exibir, agrupar_por_mes
 
@@ -268,9 +268,9 @@ agrupar_por_mes(
     nomes_colunas=["Mês Vencimento", "Qtd", "Vl. Compra", "Vl. Vencimento"],
 )
 
-# ══════════════════════════════════════════════════════════════
+ 
 # DETALHAMENTO — TABELA COMPLETA
-# ══════════════════════════════════════════════════════════════
+ 
 st.divider()
 with st.expander("🔍 Ver tabela completa de aquisições"):
     colunas_exibir = list(dict.fromkeys(c for c in COLUNAS_ESPERADAS if c in df_f.columns))

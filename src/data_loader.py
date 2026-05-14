@@ -38,6 +38,7 @@ def ler_zip(file) -> pd.DataFrame:
                         f,
                         encoding="ISO-8859-1",
                         delimiter=";",
+                        decimal=",",
                         on_bad_lines="skip",
                         low_memory=False
                     ))
@@ -56,6 +57,7 @@ def ler_csv(file) -> pd.DataFrame:
         file,
         encoding="ISO-8859-1",
         delimiter=";",
+        decimal=",",
         on_bad_lines="skip",
         low_memory=False
     )
@@ -215,6 +217,7 @@ def processar_zip_por_chunks(caminho_zip: str, colunas: list = None):
                     chunksize=CHUNK_SIZE,
                     encoding='ISO-8859-1',
                     sep=";",
+                    decimal=",",
                     usecols=colunas,
                     low_memory=False
                 ):
