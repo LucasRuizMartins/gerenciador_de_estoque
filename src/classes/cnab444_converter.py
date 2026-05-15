@@ -190,7 +190,7 @@ class CNAB444Converter:
             + "0000"                                        # 31-34
             + f.alfa("", 2)                                 # 35-36
             + "0"                                           # 37
-            + f.alfa_num(str(row.get("SEU_NUMERO", "")), 25) # 38-62
+            + f.alfa(str(row.get("SEU_NUMERO", "")), 25)    # 38-62
             + "000"                                         # 63-65
             + "00000"                                       # 66-70
             + "00000000000"                                 # 71-81
@@ -204,7 +204,7 @@ class CNAB444Converter:
             + " "                                           # 106 (Branco - End Aviso)
             + f.alfa("", 2)                                 # 107-108
             + f.num(row.get("IDENTIFICACAO_OCORRENCIA", c["identificacao_ocorrencia"]), 2) # 109-110
-            + f.alfa_num(str(row.get("NU_DOCUMENTO", "")), 10) # 111-120
+            + f.alfa(str(row.get("NU_DOCUMENTO", "")), 10) # 111-120
             + f.data(row.get("DATA_VENCIMENTO_AJUSTADA"))   # 121-126
             + f.num(row.get("VALOR_NOMINAL", 0), 13, 2)     # 127-139
             + "000"                                         # 140-142

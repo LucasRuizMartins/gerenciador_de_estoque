@@ -266,3 +266,23 @@ class TestConversaoTaxas:
         taxa_orig = 0.05
         aa = converter_para_anual(taxa_orig)
         assert converter_para_mensal(aa) == pytest.approx(taxa_orig, abs=1e-10)
+
+    def test_overflow_extremo(self):
+        """Valida que valores absurdos não quebram o sistema."""
+        from src.classes.analise_cnab import calcular_taxa, converter_para_anual
+        
+        # Caso que dispara o INF no calcular_taxa (10^420 > 10^300)
+        taxa_inf = calcular_taxa(1e12, 0.01, 1)
+        assert taxa_inf == float('inf')
+        
+        # Caso que NÃO dispara INF no calcular_taxa mas dispara no converter_para_anual
+        taxa_alta = calcular_taxa(1e6, 0.01, 1) # ~1e240
+        assert taxa_alta > 1e100
+        assert taxa_alta != float('inf')
+        
+        # Conversão de taxa alta (> 1e25) deve resultar em INF
+        aa = converter_para_anual(taxa_alta)
+        assert aa == float('inf')
+        
+        # Conversão de taxa já infinita
+        assert converter_para_anual(float('inf')) == float('inf')

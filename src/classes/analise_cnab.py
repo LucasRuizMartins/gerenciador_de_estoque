@@ -2,6 +2,7 @@
 Projeção de Taxa - Moovpay
 Fórmula base: juros compostos com prazo em dias, taxa em meses (30 dias)
 """
+import math
  
  
 # ─────────────────────────────────────────────
@@ -22,7 +23,19 @@ def calcular_taxa(vf: float, vp: float, prazo: int) -> float:
     """
     if vp <= 0 or prazo <= 0:
         return 0.0
-    return (vf / vp) ** (30 / prazo) - 1
+    
+    try:
+        base = vf / vp
+        expoente = 30 / prazo
+        
+        # Proteção contra overflow na exponenciação
+        # Limite para float64 é ~1.8e308. Usamos 300 para margem de segurança.
+        if base > 0 and expoente * math.log10(base) > 300:
+            return float('inf')
+            
+        return base ** expoente - 1
+    except (OverflowError, ZeroDivisionError):
+        return float('inf')
  
  
 def calcular_vp(vf: float, taxa: float, prazo: int) -> float:
@@ -59,7 +72,15 @@ def calcular_vf(vp: float, taxa: float, prazo: int) -> float:
  
 def converter_para_anual(taxa_mensal: float) -> float:
     """Converte uma taxa mensal composta para anual."""
-    return (1 + taxa_mensal) ** 12 - 1
+    if taxa_mensal == float('inf'):
+        return float('inf')
+    try:
+        # (1 + x)**12 > 1e308 => 1+x > 1e25.6
+        if taxa_mensal > 1e25:
+            return float('inf')
+        return (1 + taxa_mensal) ** 12 - 1
+    except OverflowError:
+        return float('inf')
  
  
 def converter_para_mensal(taxa_anual: float) -> float:
