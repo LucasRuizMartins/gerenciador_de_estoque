@@ -32,9 +32,13 @@ fundos = {
     'Ene2':'Ene2',
     'cdc':'cdc',
     'apex':'apex',
-    'cobuccio_fidc':'cobuccio_fidc'
+    'cobuccio_fidc':'cobuccio_fidc',
+    'cobuccio_master':'cobuccio_master',
+    'cobuccio_fgts':'cobuccio_fgts',
+    'portofino' : 'portofino'
+    
 }
-fundo_selecionado = fundos['fidara']
+fundo_selecionado = fundos['portofino']
 
 PATH_PLANILHA =   user+ rf'\Carmel Capital\Arquivos - Documentos\00 - CARMEL ASSET\01 - OPERACIONAL\CONTROLADORIA\01 - Relatorios Diarios\Caixa Diario\DADOS_TREINAMENTO\{fundo_selecionado}.xlsx'
 COLUNA_HISTORICO = 'Historico'

@@ -172,19 +172,43 @@ def processar_pdd(df_estoque, usar_vagao, faixas, filtrar_wop=True):
     return df_final
 
 def criar_dataframe_pdd(df):
-    atraso_vp = df[df['SITUACAO_RECEBIVEL'] == 'Vencido']['VALOR_PRESENTE'].sum()
-    pdd_sem_wop = df[df['FAIXA_PDD'] != 'WOP']['VALOR_PDD'].sum()
-    pdd_wop = df[df['FAIXA_PDD'] == 'WOP']['VALOR_PDD'].sum()
-    valor_presente = df['VALOR_PRESENTE'].sum()
-    total_pdd = df['VALOR_PDD'].sum()
+    def get_col(df, col):
+        if col not in df.columns:
+            return pd.Series(0.0, index=df.index)
+        serie = df[col]
+        if isinstance(serie, pd.DataFrame):
+            serie = serie.iloc[:, 0]
+        return pd.to_numeric(serie, errors='coerce').fillna(0.0)
+
+    vp = get_col(df, 'VALOR_PRESENTE')
+    pdd = get_col(df, 'VALOR_PDD')
+    
+    atraso_vp = 0.0
+    if 'SITUACAO_RECEBIVEL' in df.columns:
+        sit = df['SITUACAO_RECEBIVEL']
+        if isinstance(sit, pd.DataFrame): sit = sit.iloc[:, 0]
+        atraso_vp = float(vp[sit == 'Vencido'].sum())
+
+    pdd_sem_wop = 0.0
+    pdd_wop = 0.0
+    if 'FAIXA_PDD' in df.columns:
+        faixa = df['FAIXA_PDD']
+        if isinstance(faixa, pd.DataFrame): faixa = faixa.iloc[:, 0]
+        pdd_sem_wop = float(pdd[faixa != 'WOP'].sum())
+        pdd_wop = float(pdd[faixa == 'WOP'].sum())
+    else:
+        pdd_sem_wop = float(pdd.sum())
+
+    valor_presente = float(vp.sum())
+    total_pdd = float(pdd.sum())
     
     df_pdd = pd.DataFrame({
-    'Carteira Atraso': [atraso_vp],
-    'PDD s/ WO': [pdd_sem_wop],
-    'PDD / Carteira Atraso': [pdd_sem_wop / atraso_vp if atraso_vp != 0 else 0],
-    '(WOP)': [pdd_wop],
-    'Carteira VP': [valor_presente],
-    'PDD Total': [total_pdd],
-    'PDD / Carteira': [total_pdd / valor_presente if valor_presente != 0 else 0]
+        'Carteira Atraso': [atraso_vp],
+        'PDD s/ WO': [pdd_sem_wop],
+        'PDD / Carteira Atraso': [pdd_sem_wop / atraso_vp if atraso_vp != 0 else 0],
+        '(WOP)': [pdd_wop],
+        'Carteira VP': [valor_presente],
+        'PDD Total': [total_pdd],
+        'PDD / Carteira': [total_pdd / valor_presente if valor_presente != 0 else 0]
     })
     return df_pdd
