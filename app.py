@@ -18,7 +18,7 @@ st.set_page_config(
     layout='wide'
 )
 
-st.logo("data/images/LOGO-BRANCO.png")
+st.logo("assets/LOGO-BRANCO.png")
 
 st.markdown(
     """
