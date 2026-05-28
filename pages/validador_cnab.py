@@ -63,8 +63,8 @@ df['prazo'] = (df['data_vencimento'] - df['data_aquisicao']).dt.days
 df['prazo'] = df['prazo'].apply(lambda x: max(x, 1)) # Mínimo 1 dia para evitar divisão por zero
 
 df['taxa_am'] = df.apply(
-    lambda r: ac.calcular_taxa(r['valor_nominal'], r['valor_presente'], r['prazo']) 
-    if r['valor_presente'] > 0 else 0, 
+    lambda r: ac.calcular_taxa(r['valor_nominal'], r['valor_aquisicao'], r['prazo']) 
+    if r['valor_aquisicao'] > 0 else 0, 
     axis=1
 )
 df['taxa_aa'] = df['taxa_am'].apply(ac.converter_para_anual)
@@ -117,7 +117,8 @@ col1, col2, col3, col4, col5,col6 = st.columns(6)
 col1.metric("Total Títulos", f"{len(df):,}")
 col2.metric("Valor Nominal Total", fmt.format_br(df['valor_nominal'].sum()))
 col3.metric("Valor Pago Total", fmt.format_br(df['valor_pago'].sum()))
-col4.metric("Valor Presente Total", fmt.format_br(df['valor_presente'].sum()))
+label_valor = "Valor de Aquisição Total" if tipo_arquivo == "Cessão (Aquisição)" else "Valor Presente Total"
+col4.metric(label_valor, fmt.format_br(df['valor_aquisicao'].sum()))
 col5.metric("Contagem de Sacados", f"{df['doc_sacado'].nunique():,}")
 col6.metric("Contagem de Cedentes", f"{df['cedente'].nunique():,}")
 
@@ -126,7 +127,7 @@ if tipo_arquivo == "Cessão (Aquisição)":
     st.subheader("📈 Análise de Taxas e Projeções")
     
     # Preparar dados para o módulo analise_cnab
-    titulos_dict = df.rename(columns={'valor_nominal': 'vf', 'valor_presente': 'vp'}).to_dict('records')
+    titulos_dict = df.rename(columns={'valor_nominal': 'vf', 'valor_aquisicao': 'vp'}).to_dict('records')
     taxa_media = ac.taxa_equivalente_total(titulos_dict)
 
     c1, c2 = st.columns([1, 2])
@@ -164,6 +165,7 @@ st.dataframe(
     df.style.format({
         'valor_nominal': 'R$ {:,.2f}',
         'valor_pago': 'R$ {:,.2f}',
+        'valor_aquisicao': 'R$ {:,.2f}',
         'valor_presente': 'R$ {:,.2f}',
         'data_aquisicao': lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else "-",
         'data_vencimento': lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else "-",

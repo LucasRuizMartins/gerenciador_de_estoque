@@ -18,6 +18,37 @@ st.set_page_config(
     layout='wide'
 )
 
+st.logo("data/images/LOGO-BRANCO.png")
+
+st.markdown(
+    """
+    <style>
+        /* Aumenta a logo nativa diretamente pelo cabeçalho (quebra as restrições de tamanho) */
+        [data-testid="stSidebarHeader"] {
+           padding-top: 4rem !important;
+           padding-bottom: 4rem !important;
+        }
+        [data-testid="stSidebarHeader"] img {
+            width: 100% !important;
+            height: 120px !important;
+            max-height: none !important;
+            max-width: none !important;
+            object-fit: contain !important;
+        }
+        /* Define o fundo verde apenas para a barra lateral */
+        [data-testid="stSidebar"] {
+            background-color: #03975eff !important;
+        }
+        /* Deixa os textos e links da barra lateral brancos para dar contraste */
+        [data-testid="stSidebarNav"] span, 
+        [data-testid="stSidebar"] p, 
+        [data-testid="stSidebar"] label {
+            color: white !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 
 pagina_estoque = st.Page(

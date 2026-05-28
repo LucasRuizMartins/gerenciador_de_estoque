@@ -46,6 +46,7 @@ class SingulareParser(CNABParser):
                     'especie_titulo': linha[147:149].strip(),
                     'data_vencimento': linha[120:126].strip(),
                     'valor_nominal': self._safe_float(linha[126:139]) / 100,
+                    'valor_aquisicao': self._safe_float(linha[192:205]) / 100,
                     'valor_presente': self._safe_float(linha[192:205]) / 100,
                     'cedente': linha[334:380].strip(),
                     'doc_cedente': linha[380:394].strip(),
