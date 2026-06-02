@@ -161,8 +161,11 @@ else:
 
 # ── Tabela ─────────────────────────────────────
 
+if len(df) > 1000:
+    st.warning(f"⚠️ O arquivo possui {len(df)} registros. Exibindo apenas os 1000 primeiros na tabela abaixo para evitar lentidão.")
+
 st.dataframe(
-    df.style.format({
+    df.head(1000).style.format({
         'valor_nominal': 'R$ {:,.2f}',
         'valor_pago': 'R$ {:,.2f}',
         'valor_aquisicao': 'R$ {:,.2f}',

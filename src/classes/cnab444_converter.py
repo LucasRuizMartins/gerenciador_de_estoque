@@ -1,21 +1,44 @@
 import pandas as pd
+import numpy as np
 import os
+import re
 from datetime import datetime, date
 from typing import Dict, List, Optional, Union, Any
 # pyrefly: ignore [missing-import]
 from src.global_var import MAP_ESPECIE_TITULO
 
+# Definições estáticas para otimização de CPU-bound operations
+TRANS_TABLE = str.maketrans({
+    'Á':'A','À':'A','Â':'A','Ã':'A','Ä':'A',
+    'É':'E','È':'E','Ê':'E','Ë':'E',
+    'Í':'I','Ì':'I','Î':'I','Ï':'I',
+    'Ó':'O','Ò':'O','Ô':'O','Õ':'O','Ö':'O',
+    'Ú':'U','Ù':'U','Û':'U','Ü':'U',
+    'Ç':'C','Ñ':'N'
+})
+INVALID_CHARS_RE = re.compile(r'[^A-Z0-9 \.\-\/,]')
+ALFANUM_CHARS_RE = re.compile(r'[^A-Z0-9\.\-\/,]')
+DIGITS_ONLY_RE = re.compile(r'\D')
+
+
 class CNABFormatter:
-    """Utilitários de formatação para arquivos CNAB."""
+    """Utilitários de formatação clássicos para arquivos CNAB (chamadas individuais)."""
 
     @staticmethod
     def num(valor: Any, tamanho: int, decimais: int = 0) -> str:
         """Campo numérico: alinhado à direita, zeros à esquerda."""
         if valor is None or (isinstance(valor, float) and pd.isna(valor)):
             valor = 0
-        if decimais > 0:
-            valor = round(float(valor) * (10 ** decimais))
-        valor = int(valor)
+        if isinstance(valor, str):
+            valor = valor.strip()
+            if "," in valor:
+                valor = valor.replace(".", "").replace(",", ".")
+        try:
+            if decimais > 0:
+                valor = round(float(valor) * (10 ** decimais))
+            valor = int(valor)
+        except Exception:
+            valor = 0
         return str(valor).zfill(tamanho)[-tamanho:]
 
     @staticmethod
@@ -23,21 +46,8 @@ class CNABFormatter:
         """Campo alfanumérico: maiúsculo, sem acento, alinhado à esquerda."""
         if valor is None or (isinstance(valor, float) and pd.isna(valor)):
             valor = ""
-        valor = str(valor).upper()
-        
-        replacements = {
-            'Á':'A','À':'A','Â':'A','Ã':'A','Ä':'A',
-            'É':'E','È':'E','Ê':'E','Ë':'E',
-            'Í':'I','Ì':'I','Î':'I','Ï':'I',
-            'Ó':'O','Ò':'O','Ô':'O','Õ':'O','Ö':'O',
-            'Ú':'U','Ù':'U','Û':'U','Ü':'U',
-            'Ç':'C','Ñ':'N',
-        }
-        for k, v in replacements.items():
-            valor = valor.replace(k, v)
-        
-        # Remove caracteres especiais mantendo básicos
-        valor = ''.join(c if c.isalnum() or c in ' .-/,' else ' ' for c in valor)
+        valor = str(valor).upper().translate(TRANS_TABLE)
+        valor = INVALID_CHARS_RE.sub(' ', valor)
         return valor[:tamanho].ljust(tamanho)
 
     @staticmethod
@@ -47,69 +57,118 @@ class CNABFormatter:
             valor = ""
         
         # Limpeza básica (reaproveitando lógica de alfa)
-        valor = str(valor).upper().strip()
-        replacements = {
-            'Á':'A','À':'A','Â':'A','Ã':'A','Ä':'A',
-            'É':'E','È':'E','Ê':'E','Ë':'E',
-            'Í':'I','Ì':'I','Î':'I','Ï':'I',
-            'Ó':'O','Ò':'O','Ô':'O','Õ':'O','Ö':'O',
-            'Ú':'U','Ù':'U','Û':'U','Ü':'U',
-            'Ç':'C','Ñ':'N',
-        }
-        for k, v in replacements.items():
-            valor = valor.replace(k, v)
-        
-        valor = ''.join(c if c.isalnum() or c in '.-/,' else '' for c in valor)
+        valor = str(valor).upper().translate(TRANS_TABLE)
+        valor = ALFANUM_CHARS_RE.sub('', valor)
         
         # Preenche com zeros à esquerda
         return valor.zfill(tamanho)[-tamanho:]
 
     @staticmethod
-    def data(valor: any) -> str:
+    def data(valor: Any) -> str:
         """Formata data para DDMMAA de forma robusta."""
         if valor is None or (isinstance(valor, float) and pd.isna(valor)):
             return "000000"
         
-        try:
-            # Se já for datetime ou date
-            if isinstance(valor, (datetime, date)):
-                return valor.strftime("%d%m%y")
+        # Se for um Timestamp do pandas, datetime ou date, ou um objeto que responda a strftime
+        if isinstance(valor, (datetime, date)) or hasattr(valor, "strftime"):
+            return valor.strftime("%d%m%y")
             
-            # Tenta converter usando pandas (que é muito flexível)
+        try:
+            # Tenta converter usando pandas (como fallback caso venha como string e não tenha sido pré-processado)
             dt = pd.to_datetime(valor, errors='coerce')
             if pd.notna(dt):
                 return dt.strftime("%d%m%y")
-                
         except Exception:
             pass
             
         return "000000"
 
     @staticmethod
-    def cep(valor: any) -> str:
+    def cep(valor: Any) -> str:
         """Remove hífen e garante 8 dígitos."""
         if valor is None or (isinstance(valor, float) and pd.isna(valor)):
             return "00000000"
-        s = ''.join(filter(str.isdigit, str(valor)))
+        s = DIGITS_ONLY_RE.sub('', str(valor))
         return s.zfill(8)[:8]
 
     @staticmethod
-    def cnpj_cpf(valor: any, tamanho: int = 14) -> str:
+    def cnpj_cpf(valor: Any, tamanho: int = 14) -> str:
         """Remove pontuação e retorna só dígitos."""
         if valor is None or (isinstance(valor, float) and pd.isna(valor)):
             return "0" * tamanho
-        s = ''.join(filter(str.isdigit, str(valor)))
+        s = DIGITS_ONLY_RE.sub('', str(valor))
         return s.zfill(tamanho)[-tamanho:]
 
 
+class CNABFormatterVectorized:
+    """Utilitários de formatação de CNAB otimizados com Pandas (Vetorizados)."""
+
+    @staticmethod
+    def num(series: pd.Series, tamanho: int, decimais: int = 0) -> pd.Series:
+        # Suporta decimais brasileiros com vírgula e remove pontos de milhar
+        s = series.fillna("0").astype(str).str.strip()
+        has_comma = s.str.contains(",", regex=False)
+        s_cleaned = pd.Series(
+            np.where(has_comma, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False), s),
+            index=series.index
+        )
+        
+        s_num = pd.to_numeric(s_cleaned, errors='coerce').fillna(0)
+        if decimais > 0:
+            s_num = (s_num * (10 ** decimais)).round()
+        s_str = s_num.astype(np.int64).astype(str)
+        return s_str.str.zfill(tamanho).str.slice(-tamanho)
+
+    @staticmethod
+    def alfa(series: pd.Series, tamanho: int) -> pd.Series:
+        s = series.fillna("").astype(str).str.upper()
+        # Traduz acentos de forma rápida na lista de strings
+        translated = [val.translate(TRANS_TABLE) for val in s]
+        s = pd.Series(translated, index=series.index)
+        # Substitui caracteres inválidos
+        s = s.str.replace(r'[^A-Z0-9 \.\-\/,]', ' ', regex=True)
+        return s.str.slice(0, tamanho).str.ljust(tamanho)
+
+    @staticmethod
+    def alfa_num(series: pd.Series, tamanho: int) -> pd.Series:
+        s = series.fillna("").astype(str).str.upper()
+        translated = [val.translate(TRANS_TABLE) for val in s]
+        s = pd.Series(translated, index=series.index)
+        s = s.str.replace(r'[^A-Z0-9\.\-\/,]', '', regex=True)
+        return s.str.zfill(tamanho).str.slice(-tamanho)
+
+    @staticmethod
+    def data(series: pd.Series) -> pd.Series:
+        if pd.api.types.is_datetime64_any_dtype(series):
+            return series.dt.strftime("%d%m%y").fillna("000000")
+        dt = pd.to_datetime(series, dayfirst=True, errors='coerce')
+        return dt.dt.strftime("%d%m%y").fillna("000000")
+
+    @staticmethod
+    def cep(series: pd.Series) -> pd.Series:
+        s = series.fillna("").astype(str).str.replace(r'\D', '', regex=True)
+        return s.str.zfill(8).str.slice(0, 8)
+
+    @staticmethod
+    def cnpj_cpf(series: pd.Series, tamanho: int = 14) -> pd.Series:
+        s = series.fillna("").astype(str).str.replace(r'\D', '', regex=True)
+        return s.str.zfill(tamanho).str.slice(-tamanho)
+
+    @staticmethod
+    def tipo_pessoa(series: pd.Series) -> pd.Series:
+        s = series.fillna("").astype(str).str.replace(r'\D', '', regex=True)
+        return np.where(s.str.len() <= 11, "01", "02")
+
+
 class CNAB444Converter:
-    """Conversor de Excel para CNAB 444 (BRL Trust FIDC)."""
+    """Conversor de Excel/CSV para CNAB 444 (BRL Trust FIDC)."""
     
     LINE_SIZE = 444
 
     def __init__(self, config: Dict):
         self.config = config
         self.formatter = CNABFormatter()
+        self.formatter_vec = CNABFormatterVectorized()
         # Converte o mapa do global_var (int: desc) para (desc_upper: cod_str)
         self.mapa_especies = {
             v.upper(): str(k).zfill(2) for k, v in MAP_ESPECIE_TITULO.items()
@@ -132,6 +191,17 @@ class CNAB444Converter:
             
         chave = ''.join(c if c.isalnum() or c == ' ' else ' ' for c in chave)
         return self.mapa_especies.get(chave, "01")
+
+    def _get_especie_vectorized(self, series: pd.Series) -> pd.Series:
+        s = series.fillna("").astype(str).str.upper().str.strip()
+        token1 = s.str.split('-').str[0].str.strip().str.split().str[0].fillna("")
+        is_digit = token1.str.isdigit()
+        
+        cleaned_chars = s.str.replace(r'[^A-Z0-9 ]', ' ', regex=True)
+        mapped = cleaned_chars.map(self.mapa_especies).fillna("01")
+        
+        result = np.where(is_digit, token1.str.zfill(2).str.slice(-2), mapped)
+        return pd.Series(result, index=series.index)
 
     def _get_tipo_pessoa(self, doc: str) -> str:
         s = ''.join(filter(str.isdigit, str(doc))) if doc else ""
@@ -232,6 +302,100 @@ class CNAB444Converter:
         )
         return self._valida_linha(linha)
 
+    def _get_df_column(self, df: pd.DataFrame, keys: List[str], fallback_default) -> pd.Series:
+        for k in keys:
+            if k in df.columns:
+                return df[k]
+            # Case-insensitive and stripped lookup
+            for col in df.columns:
+                if str(col).strip().upper() == k.upper():
+                    return df[col]
+        return fallback_default
+
+    def montar_detalhes_vectorized(self, df: pd.DataFrame, start_seq: int) -> pd.Series:
+        """Monta registros de detalhe de forma totalmente vetorizada."""
+        f = self.formatter_vec
+        c = self.config
+        N = len(df)
+        
+        # Colunas Estáticas repetidas
+        col1 = pd.Series(["1"] * N, index=df.index)
+        col2 = pd.Series(["000000"] * N, index=df.index)
+        col3 = pd.Series([self.formatter.num(c.get("tipo_juros", 0), 1)] * N, index=df.index)
+        col4 = pd.Series(["  "] * N, index=df.index)
+        col5 = pd.Series([self.formatter.num(c.get("taxa_juros", 0), 10)] * N, index=df.index)
+        col6 = pd.Series([c["coobrigacao"][:2]] * N, index=df.index)
+        col7 = pd.Series(["000000000000  0"] * N, index=df.index) # pos 23-37
+        
+        # Dados do Título (com busca tolerante de cabeçalhos)
+        col13 = f.alfa(self._get_df_column(df, ["SEU_NUMERO", "SEU NÚMERO", "Seu Numero"], pd.Series([""] * N, index=df.index)), 25)
+        col14 = pd.Series(["0000000000000000000 "] * N, index=df.index) # pos 63-82
+        col18 = f.num(self._get_df_column(df, ["VALOR_PAGO", "Valor Pago", "VALOR PAGO"], pd.Series([0] * N, index=df.index)), 10, 2)
+        col19 = pd.Series(["  "] * N, index=df.index)
+        col21 = f.data(self._get_df_column(df, ["DATA_LIQUIDACAO", "Data Liquidacao", "DATA LIQUIDAÇÃO"], pd.Series([None] * N, index=df.index)))
+        col22 = pd.Series(["        "] * N, index=df.index)
+        
+        # Ocorrência e Documento
+        col26 = f.num(self._get_df_column(df, ["IDENTIFICACAO_OCORRENCIA", "Identificacao Ocorrencia", "IDENTIFICAÇÃO OCORRÊNCIA"], pd.Series([c["identificacao_ocorrencia"]] * N, index=df.index)), 2)
+        col27 = f.alfa(self._get_df_column(df, ["NU_DOCUMENTO", "Nu Documento", "NU DOCUMENTO"], pd.Series([""] * N, index=df.index)), 10)
+        col28 = f.data(self._get_df_column(df, ["DATA_VENCIMENTO_AJUSTADA", "Data Vencimento Ajustada", "DATA VENCIMENTO"], pd.Series([None] * N, index=df.index)))
+        col29 = f.num(self._get_df_column(df, ["VALOR_NOMINAL", "Valor Nominal", "VALOR NOMINAL"], pd.Series([0] * N, index=df.index)), 13, 2)
+        col30 = pd.Series(["00000000"] * N, index=df.index)
+        
+        # Espécie
+        col32 = self._get_especie_vectorized(self._get_df_column(df, ["TIPO_RECEBIVEL", "Tipo Recebivel", "TIPO RECEBÍVEL"], pd.Series([""] * N, index=df.index)))
+        col33 = pd.Series([" "] * N, index=df.index)
+        col34 = f.data(self._get_df_column(df, ["DATA_EMISSAO", "Data Emissao", "DATA EMISSÃO"], pd.Series([None] * N, index=df.index)))
+        col35 = pd.Series(["000"] * N, index=df.index)
+        col37 = f.tipo_pessoa(self._get_df_column(df, ["DOC_CEDENTE", "Doc Cedente"], pd.Series([""] * N, index=df.index)))
+        col38 = pd.Series(["000000000000"] * N, index=df.index)
+        
+        # Termo de Cessão
+        termo_cessao = self._get_df_column(df, ["TERMO_CESSAO", "Termo Cessao", "TERMO CESSÃO"], pd.Series([None] * N, index=df.index)).fillna("")
+        data_aquisicao = self._get_df_column(df, ["DATA_AQUISICAO", "Data Aquisicao", "DATA AQUISIÇÃO"], pd.Series([None] * N, index=df.index)).fillna("")
+        if pd.api.types.is_datetime64_any_dtype(data_aquisicao) or (isinstance(data_aquisicao, pd.Series) and data_aquisicao.dtype == 'datetime64[ns]'):
+            aquis_str = data_aquisicao.dt.strftime("%Y-%m-%d %H:%M:%S").fillna("")
+        else:
+            aquis_str = data_aquisicao.astype(str).replace("NaT", "")
+        termo_combined = np.where(termo_cessao.astype(str).str.strip() != "", termo_cessao.astype(str), aquis_str)
+        col39 = f.alfa(pd.Series(termo_combined, index=df.index), 19)
+        
+        col40 = f.num(self._get_df_column(df, ["VALOR_AQUISICAO", "Valor Aquisicao", "VALOR AQUISIÇÃO", "VALOR_PRESENTE", "Valor Presente", "VALOR PRESENTE"], pd.Series([0] * N, index=df.index)), 13, 2)
+        col41 = pd.Series(["0000000000000"] * N, index=df.index)
+        
+        # Sacado e Endereço
+        col42 = f.tipo_pessoa(self._get_df_column(df, ["DOC_SACADO", "Doc Sacado"], pd.Series([""] * N, index=df.index)))
+        col43 = f.cnpj_cpf(self._get_df_column(df, ["DOC_SACADO", "Doc Sacado"], pd.Series([""] * N, index=df.index)), 14)
+        col44 = f.alfa(self._get_df_column(df, ["NOME_SACADO", "Nome Sacado"], pd.Series([""] * N, index=df.index)), 40)
+        
+        end_series = self._get_df_column(df, ["ENDERECO", "Endereco", "ENDEREÇO"], pd.Series([""] * N, index=df.index))
+        end_cleaned = np.where(end_series.isna() | (end_series.astype(str).str.strip() == ""), "X", end_series.astype(str))
+        col45 = f.alfa(pd.Series(end_cleaned, index=df.index), 40)
+        
+        # CEP e Cedente
+        col46 = pd.Series(["            "] * N, index=df.index)
+        col47 = f.cep(self._get_df_column(df, ["CEP", "Cep"], pd.Series([""] * N, index=df.index)))
+        
+        nome_ced_fmt = f.alfa(self._get_df_column(df, ["NOME_CEDENTE", "Nome Cedente"], pd.Series([""] * N, index=df.index)), 46)
+        cnpj_ced_fmt = f.cnpj_cpf(self._get_df_column(df, ["DOC_CEDENTE", "Doc Cedente"], pd.Series([""] * N, index=df.index)), 14)
+        col48 = nome_ced_fmt.str.cat(cnpj_ced_fmt)
+        
+        col49 = pd.Series([" " * 44] * N, index=df.index)
+        
+        # Sequencial incremental
+        seq_nums = pd.Series(range(start_seq, start_seq + N), index=df.index).astype(str).str.zfill(6)
+        col50 = seq_nums
+        
+        # Concatenação das colunas em lote
+        lines = col1.str.cat([
+            col2, col3, col4, col5, col6, col7, col13, col14,
+            col18, col19, col21, col22, col26, col27, col28, col29,
+            col30, col32, col33, col34, col35, col37, col38, col39,
+            col40, col41, col42, col43, col44, col45, col46, col47,
+            col48, col49, col50
+        ])
+        return lines
+
     def montar_trailer(self, seq_total: int) -> str:
         linha = (
             "9"                                         # 1
@@ -241,21 +405,37 @@ class CNAB444Converter:
         return self._valida_linha(linha)
 
     def converter(self, df: pd.DataFrame) -> List[str]:
-        """Converte um DataFrame para uma lista de linhas CNAB."""
-        linhas = []
+        """Converte um DataFrame para uma lista de linhas CNAB (vetorizado)."""
+        header = self.montar_header(self.config["nr_sequencial_arquivo"])
         
-        # Header
-        linhas.append(self.montar_header(self.config["nr_sequencial_arquivo"]))
-        
-        # Detalhes
-        for i, row_dict in enumerate(df.to_dict('records')):
-            seq = i + 2
-            linhas.append(self.montar_detalhe(row_dict, seq))
+        if len(df) > 0:
+            linhas_detalhe = self.montar_detalhes_vectorized(df, start_seq=2).tolist()
+        else:
+            linhas_detalhe = []
             
-        # Trailer
-        linhas.append(self.montar_trailer(len(linhas) + 1))
+        trailer = self.montar_trailer(len(linhas_detalhe) + 2)
+        return [header] + linhas_detalhe + [trailer]
+
+    def converter_para_fluxo(self, df: pd.DataFrame, out_stream, chunk_size: int = 50000):
+        """Converte o DataFrame em blocos (chunks) e grava diretamente no fluxo."""
+        # 1. Header
+        header = self.montar_header(self.config["nr_sequencial_arquivo"])
+        out_stream.write(header + "\r\n")
         
-        return linhas
+        # 2. Detalhes em pedaços (chunks)
+        total_registros = len(df)
+        for start_idx in range(0, total_registros, chunk_size):
+            chunk = df.iloc[start_idx : start_idx + chunk_size]
+            # O sequencial de detalhe começa em start_idx + 2
+            linhas_chunk = self.montar_detalhes_vectorized(chunk, start_seq=start_idx + 2)
+            
+            # Grava as linhas separadas por quebra de linha CNAB
+            out_stream.write("\r\n".join(linhas_chunk) + "\r\n")
+            
+        # 3. Trailer
+        # O sequencial total de linhas é header (1) + total_registros + trailer (1) = total_registros + 2
+        trailer = self.montar_trailer(total_registros + 2)
+        out_stream.write(trailer + "\r\n")
 
     def get_conteudo(self, linhas: List[str]) -> str:
         """Retorna o conteúdo formatado para gravação no arquivo."""
@@ -263,5 +443,5 @@ class CNAB444Converter:
 
     def salvar(self, linhas: List[str], caminho_saida: str):
         """Salva as linhas em um arquivo."""
-        with open(caminho_saida, "w", encoding="ascii", errors="replace") as f:
+        with open(caminho_saida, "w", encoding="ascii", errors="replace", newline="") as f:
             f.write(self.get_conteudo(linhas))

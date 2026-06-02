@@ -1,10 +1,13 @@
+# pyrefly: ignore [missing-import]
 import streamlit as st
 import pandas as pd
 import json
 import os
 from io import BytesIO
 from datetime import datetime
+# pyrefly: ignore [missing-import]
 from src.classes.cnab444_converter import CNAB444Converter
+# pyrefly: ignore [missing-import]
 from src.global_var import MAP_OCORRENCIA, MAP_ESPECIE_TITULO
 
 def carregar_configuracoes():
@@ -113,13 +116,81 @@ st.sidebar.download_button(
     use_container_width=True
 )
 
-# Upload do Arquivo
-arquivo_excel = st.file_uploader("Selecione o arquivo Excel (.xlsx)", type=["xlsx"])
+# Upload do Arquivo (Suporta Excel .xlsx ou CSV para alta performance)
+arquivo_upload = st.file_uploader("Selecione o arquivo (Excel .xlsx ou CSV .csv)", type=["xlsx", "csv"])
 
-if arquivo_excel:
+if arquivo_upload:
     try:
-        df = pd.read_excel(arquivo_excel, dtype=str)
-        st.success(f"✅ Arquivo '{arquivo_excel.name}' carregado com sucesso!")
+        nome_arquivo = arquivo_upload.name.lower()
+        if nome_arquivo.endswith(".csv"):
+            # Detecta o separador correto (, ou ;) analisando a primeira linha
+            primeira_linha = arquivo_upload.readline()
+            arquivo_upload.seek(0)
+            
+            try:
+                linha_str = primeira_linha.decode("utf-8")
+            except Exception:
+                linha_str = primeira_linha.decode("iso-8859-1", errors="ignore")
+                
+            separador = ";" if linha_str.count(";") > linha_str.count(",") else ","
+            
+            # Detecta se o CSV possui cabeçalho
+            # Se não contiver palavras como 'cedente', 'sacado', 'valor', 'data', 'documento', assume que não tem cabeçalho
+            palavras_chave = ["cedente", "sacado", "valor", "data", "documento", "cep", "tipo"]
+            tem_cabecalho = any(p in linha_str.lower() for p in palavras_chave)
+            
+            if tem_cabecalho:
+                try:
+                    df = pd.read_csv(arquivo_upload, dtype=str, sep=separador, encoding="utf-8")
+                except UnicodeDecodeError:
+                    arquivo_upload.seek(0)
+                    df = pd.read_csv(arquivo_upload, dtype=str, sep=separador, encoding="iso-8859-1")
+            else:
+                # Não possui cabeçalho: lê com header=None e renomeia colunas por posição
+                try:
+                    df = pd.read_csv(arquivo_upload, dtype=str, sep=separador, encoding="utf-8", header=None)
+                except UnicodeDecodeError:
+                    arquivo_upload.seek(0)
+                    df = pd.read_csv(arquivo_upload, dtype=str, sep=separador, encoding="iso-8859-1", header=None)
+                
+                # Mapeamento padrão baseado no layout posicional de 16 colunas
+                mapeamento_colunas = {
+                    0: "NOME_CEDENTE",
+                    1: "DOC_CEDENTE",
+                    2: "NOME_SACADO",
+                    3: "DOC_SACADO",
+                    4: "VALOR_NOMINAL",
+                    5: "VALOR_PAGO",
+                    6: "VALOR_AQUISICAO",
+                    7: "DATA_VENCIMENTO_AJUSTADA",
+                    8: "DATA_EMISSAO",
+                    9: "DATA_AQUISICAO",
+                    10: "NU_DOCUMENTO",
+                    11: "SEU_NUMERO",
+                    12: "ENDERECO",
+                    13: "CEP",
+                    14: "IDENTIFICACAO_OCORRENCIA",
+                    15: "TIPO_RECEBIVEL"
+                }
+                df.rename(columns=mapeamento_colunas, inplace=True)
+                df["VALOR_PRESENTE"] = df["VALOR_AQUISICAO"]
+        else:
+            df = pd.read_excel(arquivo_upload, dtype=str)
+            
+        # Limpa espaços em branco dos nomes das colunas para evitar incompatibilidade
+        df.columns = df.columns.str.strip()
+        
+        # OTIMIZAÇÃO: Remove linhas totalmente vazias ou com nome do sacado vazio (linhas extras de fim de arquivo)
+        df.dropna(how="all", inplace=True)
+        if "NOME_SACADO" in df.columns:
+            df = df[df["NOME_SACADO"].notna() & (df["NOME_SACADO"].astype(str).str.strip() != "")]
+            
+        st.success(f"✅ Arquivo '{arquivo_upload.name}' carregado com sucesso!")
+        
+        # OTIMIZAÇÃO: Pré-conversão vetorizada das colunas de data no DataFrame para evitar overhead do pd.to_datetime celular no loop do CNAB
+        for col_data in ["DATA_VENCIMENTO_AJUSTADA", "DATA_EMISSAO", "DATA_AQUISICAO", "DATA_LIQUIDACAO"]:
+            if col_data in df.columns:
+                df[col_data] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
         
         # Validação básica de colunas
         colunas_necessarias = [
@@ -168,8 +239,17 @@ if arquivo_excel:
                 lambda x: MAPA_OCORRENCIAS_INV.get(str(x).zfill(2), "01 - ENTRADA DE TÍTULOS (REMESSA)")
             )
 
+        # OTIMIZAÇÃO: Proteger o Streamlit contra excesso de linhas no st.data_editor (evita travamento de browser)
+        limite_editor = 100
+        tamanho_total = len(df)
+        if tamanho_total > limite_editor:
+            st.warning(f"⚠️ Planilha grande detectada ({tamanho_total} linhas). Exibindo as primeiras {limite_editor} linhas no editor interativo para garantir alta performance. As edições nesta tabela serão aplicadas aos primeiros registros, e o arquivo completo será gerado em segundo plano.")
+            df_para_editar = df.head(limite_editor).copy()
+        else:
+            df_para_editar = df.copy()
+
         df_editado = st.data_editor(
-            df,
+            df_para_editar,
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -188,29 +268,55 @@ if arquivo_excel:
 
         if st.button("🚀 Gerar Arquivo CNAB"):
             with st.spinner("Gerando remessa..."):
+                # OTIMIZAÇÃO: Reconstrói o df_final aplicando edições ou usando o dataframe original
+                if tamanho_total > limite_editor:
+                    df_final = df.copy()
+                    df_final.iloc[:limite_editor] = df_editado
+                else:
+                    df_final = df_editado.copy()
+
                 # Converte os rótulos amigáveis de volta para códigos CNAB
-                df_final = df_editado.copy()
                 df_final["TIPO_RECEBIVEL"] = df_final["TIPO_RECEBIVEL"].map(MAPA_ESPECIES_UI)
                 df_final["IDENTIFICACAO_OCORRENCIA"] = df_final["IDENTIFICACAO_OCORRENCIA"].map(MAPA_OCORRENCIAS_UI)
 
-                converter = CNAB444Converter(config)
-                linhas = converter.converter(df_final)
-                conteudo = converter.get_conteudo(linhas)
-                
                 # Nome do arquivo sugerido: CB + DDMMAA + Seq + Nome do Fundo
                 data_hoje = datetime.today().strftime("%d%m%y")
                 nome_fundo_limpo = fundo_selecionado.replace(" ", "_").upper()
                 nome_sugerido = f"CB{data_hoje}{int(config['nr_sequencial_arquivo']):02d}_{nome_fundo_limpo}.REM"
+
+                import tempfile
+                # Criamos um arquivo temporário no disco para gravação em chunks
+                temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w+", encoding="ascii", newline="")
+                temp_path = temp_file.name
                 
-                st.info(f"✅ Remessa gerada com {len(linhas)-2} registros de detalhe.")
-                
-                st.download_button(
-                    label="📥 Baixar Arquivo .REM",
-                    data=conteudo,
-                    file_name=nome_sugerido,
-                    mime="text/plain",
-                    use_container_width=True
-                )
+                try:
+                    converter = CNAB444Converter(config)
+                    # Processa e grava o DataFrame em chunks de 50.000 linhas
+                    converter.converter_para_fluxo(df_final, temp_file, chunk_size=50000)
+                    temp_file.close()
+
+                    # Lemos o arquivo binariamente para passar ao st.download_button
+                    with open(temp_path, "rb") as f_read:
+                        conteudo_bytes = f_read.read()
+                    
+                    st.info(f"✅ Remessa gerada com {tamanho_total} registros de detalhe.")
+                    
+                    st.download_button(
+                        label="📥 Baixar Arquivo .REM",
+                        data=conteudo_bytes,
+                        file_name=nome_sugerido,
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"❌ Erro durante a geração do arquivo: {e}")
+                finally:
+                    # Garante que o arquivo temporário é deletado do disco
+                    if os.path.exists(temp_path):
+                        try:
+                            os.unlink(temp_path)
+                        except Exception:
+                            pass
                 
     except Exception as e:
         st.error(f"❌ Erro ao processar arquivo: {e}")
