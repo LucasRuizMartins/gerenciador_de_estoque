@@ -187,10 +187,35 @@ if arquivo_upload:
             
         st.success(f"✅ Arquivo '{arquivo_upload.name}' carregado com sucesso!")
         
-        # OTIMIZAÇÃO: Pré-conversão vetorizada das colunas de data no DataFrame para evitar overhead do pd.to_datetime celular no loop do CNAB
+        # Pré-conversão das colunas de data.
+        # ATENÇÃO: pd.read_excel com dtype=str retorna datas Excel como strings no formato
+        # "YYYY-MM-DD HH:MM:SS" (ex: "2026-05-06 00:00:00"). O dayfirst=True do pd.to_datetime
+        # não é suficiente para todos os casos, por isso tentamos formatos explícitos primeiro.
+        FORMATOS_LEITURA = [
+            "%Y-%m-%d %H:%M:%S",  # Excel via dtype=str (mais comum)
+            "%Y-%m-%dT%H:%M:%S",  # ISO 8601 com T
+            "%d/%m/%Y", "%d/%m/%y",
+            "%d-%m-%Y", "%d-%m-%y",
+            "%Y-%m-%d",
+        ]
+        INVALIDOS_DATA = {"", "nan", "NaT", "None", "none", "NAT", "NAN"}
         for col_data in ["DATA_VENCIMENTO_AJUSTADA", "DATA_EMISSAO", "DATA_AQUISICAO", "DATA_LIQUIDACAO"]:
-            if col_data in df.columns:
-                df[col_data] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
+            if col_data not in df.columns:
+                continue
+            s = df[col_data].fillna("").astype(str).str.strip()
+            valido = ~s.isin(INVALIDOS_DATA)
+            dt = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]")
+            for fmt in FORMATOS_LEITURA:
+                mask = dt.isna() & valido
+                if not mask.any():
+                    break
+                parsed = pd.to_datetime(s[mask], format=fmt, errors="coerce")
+                dt[mask] = dt[mask].where(parsed.isna(), parsed)
+            # Fallback: inferência genérica do pandas com dayfirst=True
+            still_na = dt.isna() & valido
+            if still_na.any():
+                dt[still_na] = pd.to_datetime(s[still_na], dayfirst=True, errors="coerce")
+            df[col_data] = dt
         
         # Validação básica de colunas
         colunas_necessarias = [
@@ -278,6 +303,48 @@ if arquivo_upload:
                 # Converte os rótulos amigáveis de volta para códigos CNAB
                 df_final["TIPO_RECEBIVEL"] = df_final["TIPO_RECEBIVEL"].map(MAPA_ESPECIES_UI)
                 df_final["IDENTIFICACAO_OCORRENCIA"] = df_final["IDENTIFICACAO_OCORRENCIA"].map(MAPA_OCORRENCIAS_UI)
+
+                # Re-converte as colunas de data para datetime64 usando formato explícito DDMMYYYY/brasileiro.
+                # O st.data_editor serializa datas de volta para string no formato americano (ex: 2026-05-18),
+                # então precisamos re-parsear com format="%Y-%m-%d" (ISO, sem ambiguidade) para garantir a data correta.
+                COLUNAS_DATA = ["DATA_VENCIMENTO_AJUSTADA", "DATA_EMISSAO", "DATA_AQUISICAO", "DATA_LIQUIDACAO"]
+                # Formatos em ordem de prioridade:
+                # 1. Com timestamp (pd.read_excel + dtype=str retorna "2026-05-06 00:00:00")
+                # 2. Brasileiros DD/MM/YYYY
+                # 3. ISO YYYY-MM-DD
+                # 4. Americano MM/DD/YYYY (último recurso)
+                FORMATOS_DATA = [
+                    "%Y-%m-%d %H:%M:%S",  # Excel via dtype=str → "2026-05-06 00:00:00"
+                    "%Y-%m-%dT%H:%M:%S",  # ISO 8601 com T
+                    "%d/%m/%Y", "%d/%m/%y",
+                    "%d-%m-%Y", "%d-%m-%y",
+                    "%Y-%m-%d",
+                    "%m/%d/%Y", "%m-%d-%Y",
+                ]
+                INVALIDOS = {"", "nan", "NaT", "None", "none", "NAT", "NAN"}
+                for col_data in COLUNAS_DATA:
+                    if col_data not in df_final.columns:
+                        continue
+                    col = df_final[col_data]
+                    # Se já for datetime64, nada a fazer
+                    if pd.api.types.is_datetime64_any_dtype(col):
+                        continue
+                    # Tenta formatos explícitos em ordem
+                    dt_parsed = pd.Series(pd.NaT, index=col.index, dtype="datetime64[ns]")
+                    s_str = col.fillna("").astype(str).str.strip()
+                    valido = ~s_str.isin(INVALIDOS)
+                    for fmt in FORMATOS_DATA:
+                        mask = dt_parsed.isna() & valido
+                        if not mask.any():
+                            break
+                        parsed = pd.to_datetime(s_str[mask], format=fmt, errors="coerce")
+                        dt_parsed[mask] = dt_parsed[mask].where(parsed.isna(), parsed)
+                    # Fallback final: inferência livre do pandas para qualquer remanescente
+                    still_na = dt_parsed.isna() & valido
+                    if still_na.any():
+                        parsed_fb = pd.to_datetime(s_str[still_na], dayfirst=True, errors="coerce")
+                        dt_parsed[still_na] = dt_parsed[still_na].where(parsed_fb.isna(), parsed_fb)
+                    df_final[col_data] = dt_parsed
 
                 # Nome do arquivo sugerido: CB + DDMMAA + Seq + Nome do Fundo
                 data_hoje = datetime.today().strftime("%d%m%y")

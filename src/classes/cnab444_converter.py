@@ -66,15 +66,24 @@ class CNABFormatter:
     @staticmethod
     def data(valor: Any) -> str:
         """Formata data para DDMMAA de forma robusta."""
-        if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        # Verifica explicitamente None, NaN float e pd.NaT antes de qualquer outra coisa
+        if valor is None:
             return "000000"
+        try:
+            if pd.isna(valor):
+                return "000000"
+        except (TypeError, ValueError):
+            pass
         
-        # Se for um Timestamp do pandas, datetime ou date, ou um objeto que responda a strftime
+        # Se for um Timestamp do pandas, datetime ou date (mas NÃO NaT — já tratado acima)
         if isinstance(valor, (datetime, date)) or hasattr(valor, "strftime"):
-            return valor.strftime("%d%m%y")
+            try:
+                return valor.strftime("%d%m%y")
+            except (ValueError, AttributeError):
+                return "000000"
             
         try:
-            # Tenta converter usando pandas (como fallback caso venha como string e não tenha sido pré-processado)
+            # Tenta converter usando pandas (fallback para strings)
             dt = pd.to_datetime(valor, errors='coerce')
             if pd.notna(dt):
                 return dt.strftime("%d%m%y")
@@ -82,6 +91,7 @@ class CNABFormatter:
             pass
             
         return "000000"
+
 
     @staticmethod
     def cep(valor: Any) -> str:
@@ -141,7 +151,33 @@ class CNABFormatterVectorized:
     def data(series: pd.Series) -> pd.Series:
         if pd.api.types.is_datetime64_any_dtype(series):
             return series.dt.strftime("%d%m%y").fillna("000000")
-        dt = pd.to_datetime(series, dayfirst=True, errors='coerce')
+
+        # Tenta formatos explícitos em ordem de prioridade (brasileiro primeiro)
+        # Isso evita que o pandas interprete datas americanas MM-DD-YYYY incorretamente
+        FORMATOS_BR = [
+            "%d/%m/%Y", "%d/%m/%y",   # 18/05/2026 ou 18/05/26
+            "%d-%m-%Y", "%d-%m-%y",   # 18-05-2026 ou 18-05-26
+            "%d.%m.%Y", "%d.%m.%y",   # 18.05.2026
+            "%Y-%m-%d",               # ISO 8601 (invariável, sem ambiguidade)
+        ]
+
+        s_str = series.fillna("").astype(str).str.strip()
+        dt = pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns]")
+
+        # Primeira passagem: formatos explícitos (sem ambiguidade)
+        for fmt in FORMATOS_BR:
+            mask = dt.isna() & (s_str != "") & (s_str != "nan") & (s_str != "NaT")
+            if not mask.any():
+                break
+            parsed = pd.to_datetime(s_str[mask], format=fmt, errors="coerce")
+            dt[mask] = dt[mask].where(parsed.isna(), parsed)
+
+        # Fallback: inferência do pandas com dayfirst=True para qualquer remanescente
+        still_na = dt.isna() & (s_str != "") & (s_str != "nan") & (s_str != "NaT")
+        if still_na.any():
+            parsed_fb = pd.to_datetime(s_str[still_na], dayfirst=True, errors="coerce")
+            dt[still_na] = dt[still_na].where(parsed_fb.isna(), parsed_fb)
+
         return dt.dt.strftime("%d%m%y").fillna("000000")
 
     @staticmethod

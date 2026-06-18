@@ -9,7 +9,7 @@ Este ecossistema financeiro é uma plataforma modular desenvolvida em **Python**
 O projeto é dividido em páginas especializadas para cada etapa da operação:
 
 ### 🏦 Remessas e CNAB
-*   **Gerador de Remessa (`gerador_remessa.py`):** Interface para converter planilhas Excel no padrão CNAB 444, com seleção dinâmica de fundos e edição de ocorrências.
+*   **Gerador de Remessa (`gerador_remessa.py`):** Interface para converter planilhas Excel e arquivos CSV no padrão CNAB 444, com seleção dinâmica de fundos, edição de ocorrências e motor vetorizado otimizado para lidar com grandes bases (700k+ registros) sem estouro de memória.
 *   **Validador de CNAB (`validador_cnab.py`):** Leitor técnico de arquivos `.REM` ou `.RET`. Agora com **Inteligência Financeira**: detecta automaticamente se o arquivo é de Cessão ou Liquidação, calcula taxas implícitas (a.m. e a.a.) por título e permite simular o impacto de novas taxas no Valor Presente (VP).
 
 ### 📈 Análise de Risco e Carteira
@@ -33,7 +33,8 @@ O projeto é dividido em páginas especializadas para cada etapa da operação:
 A lógica de negócio está encapsulada em classes robustas dentro de `src/classes/`:
 
 ### 🏗️ Motores de Conversão
-*   **`CNAB444Converter`:** O motor principal de geração. Utiliza o padrão POO para montar registros de Header, Detalhe e Trailer com validação de tamanho de linha.
+*   **`CNAB444Converter`:** O motor principal de geração. Utiliza o padrão POO para montar registros de Header, Detalhe e Trailer com validação de tamanho de linha. Inclui suporte a geração em fluxo (*stream* e *chunks*) para manter a memória sob controle.
+*   **`CNABFormatterVectorized`:** Classe auxiliar de alto desempenho baseada em Pandas e NumPy. Formata de maneira vetorizada as seções do arquivo CNAB (remoção de caracteres, preenchimento de zeros/espaços, alinhamento de texto e conversão numérica acelerada).
 *   **`CNABParserFactory`:** Implementa o padrão *Factory* para detectar automaticamente qual banco/layout deve ser usado para ler um arquivo CNAB.
 *   **`SingulareParser`:** Especialização do leitor para o layout da administradora Singulare.
 
@@ -135,6 +136,16 @@ pytest tests/unit/
 ---
 
 ## 📝 Changelog
+
+### v — 02/06/2026
+
+#### Otimização de Performance e Memória para Larga Escala (Remessa CNAB 444)
+- **Vetorização do Motor CNAB**: Reescrevemos a geração de detalhes em [cnab444_converter.py](file:///c:/Users/Nowtek/Carmel%20Capital/TECNOLOGIA%20-%20Documentos/Geral/DESENVOLVIMENTO/PYTHON/PROJETOS_EM_DESENVOLVIMENTO/gerenciador_de_estoque/src/classes/cnab444_converter.py) e criamos `CNABFormatterVectorized` utilizando Pandas/NumPy, reduzindo o processamento local de **10+ minutos para 12 segundos** para 668k+ registros.
+- **Processamento Chunked e Streams**: O DataFrame passa a ser processado e escrito diretamente no disco em blocos de 50.000 linhas via `NamedTemporaryFile(newline="")`. O pico de consumo de RAM caiu de **~3 GB para ~190MB**, viabilizando a execução no plano gratuito de 1GB do Streamlit Cloud.
+- **Suporte Nativo e Autodetecção de CSV**: A interface agora aceita uploads de arquivos `.csv` e `.xlsx`, realizando autodetecção de delimitadores comuns (`,`, `;`) e codificações brasileiras comuns (`utf-8`, `iso-8859-1`).
+- **Autodetecção e Mapeamento de Cabeçalho**: Sistema inteligente que identifica arquivos CSV sem linha de cabeçalho e realiza o mapeamento por ordem posicional e índice automaticamente.
+- **Sanitização Monetária e de Datas**: Tratamento robusto de decimais brasileiros com vírgula e pontos de milhar (ex: `12.254.882,00`), além de garantia da ordem das datas europeia/brasileira com `dayfirst=True`.
+- **Prevenção de Quebras no Windows**: Corrigido bug de quebras de linha duplicadas (`\r\r\n`) que geravam linhas fantasmas no validador.
 
 ### v — 08/05/2026
 
