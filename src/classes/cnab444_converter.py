@@ -21,6 +21,28 @@ ALFANUM_CHARS_RE = re.compile(r'[^A-Z0-9\.\-\/,]')
 DIGITS_ONLY_RE = re.compile(r'\D')
 
 
+def _fmt_termo_cessao(valor: Any) -> str:
+    """Formata valor para o campo TERMO_CESSAO (X(19)).
+    Se for datetime/date, retorna DD/MM/YYYY (sem traços, sem timestamp).
+    Caso contrário, retorna str() do valor.
+    """
+    if valor is None:
+        return ""
+    try:
+        if pd.isna(valor):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if isinstance(valor, (datetime, date)):
+        return valor.strftime("%d%m%y")
+    if hasattr(valor, "strftime"):
+        try:
+            return valor.strftime("%d%m%y")
+        except (ValueError, AttributeError):
+            return ""
+    return str(valor)
+
+
 class CNABFormatter:
     """Utilitários de formatação clássicos para arquivos CNAB (chamadas individuais)."""
 
@@ -322,7 +344,7 @@ class CNAB444Converter:
             + "0"                                           # 159
             + self._get_tipo_pessoa(row.get("DOC_CEDENTE")) # 160-161
             + f.alfa("", 12)                                # 162-173 (Juros/Mora X(12))
-            + f.alfa(str(row.get("TERMO_CESSAO", row.get("DATA_AQUISICAO", ""))), 19) # 174-192
+            + f.alfa(_fmt_termo_cessao(row.get("TERMO_CESSAO", row.get("DATA_AQUISICAO", ""))), 19) # 174-192
             + f.num(row.get("VALOR_AQUISICAO", 0), 13, 2)   # 193-205
             + f.num(0, 13, 2)                               # 206-218
             + self._get_tipo_pessoa(row.get("DOC_SACADO"))  # 219-220
@@ -390,9 +412,17 @@ class CNAB444Converter:
         termo_cessao = self._get_df_column(df, ["TERMO_CESSAO", "Termo Cessao", "TERMO CESSÃO"], pd.Series([None] * N, index=df.index)).fillna("")
         data_aquisicao = self._get_df_column(df, ["DATA_AQUISICAO", "Data Aquisicao", "DATA AQUISIÇÃO"], pd.Series([None] * N, index=df.index)).fillna("")
         if pd.api.types.is_datetime64_any_dtype(data_aquisicao) or (isinstance(data_aquisicao, pd.Series) and data_aquisicao.dtype == 'datetime64[ns]'):
-            aquis_str = data_aquisicao.dt.strftime("%Y-%m-%d %H:%M:%S").fillna("")
+            aquis_str = data_aquisicao.dt.strftime("%d%m%y").fillna("")
         else:
-            aquis_str = data_aquisicao.astype(str).replace("NaT", "")
+            # Se vier como string, limpa valores inválidos e remove timestamps residuais
+            s_raw = data_aquisicao.astype(str).str.strip()
+            invalidos = {"NaT", "nan", "None", "none", "", "NAN", "NAT"}
+            # Tenta converter strings que ainda tenham formato YYYY-MM-DD... para DD/MM/YYYY
+            mask_dt = ~s_raw.isin(invalidos)
+            dt_parsed = pd.to_datetime(s_raw[mask_dt], errors="coerce")
+            s_fmt = s_raw.copy()
+            s_fmt[mask_dt] = np.where(dt_parsed.notna(), dt_parsed.dt.strftime("%d%m%y"), s_raw[mask_dt])
+            aquis_str = s_fmt.where(~s_raw.isin(invalidos), "")
         termo_combined = np.where(termo_cessao.astype(str).str.strip() != "", termo_cessao.astype(str), aquis_str)
         col39 = f.alfa(pd.Series(termo_combined, index=df.index), 19)
         
