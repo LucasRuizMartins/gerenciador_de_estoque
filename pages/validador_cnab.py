@@ -35,7 +35,7 @@ header_raw = parser.header
 tem_baixa = False
 for cod in df['identificacao_ocorrencia'].unique():
     desc = MAP_OCORRENCIA.get(cod, "").lower()
-    if "baixa" in desc or cod in ['14', '71', '72', '73', '74', '75', '76', '77']:
+    if "baixa" in desc or "liquidação" in desc or cod in ['14', '27', '48', '71', '72', '73', '74', '75', '76', '77']:
         tem_baixa = True
         break
 

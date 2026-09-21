@@ -16,6 +16,7 @@ TRANS_TABLE = str.maketrans({
     'Ú':'U','Ù':'U','Û':'U','Ü':'U',
     'Ç':'C','Ñ':'N'
 })
+
 INVALID_CHARS_RE = re.compile(r'[^A-Z0-9 \.\-\/,]')
 ALFANUM_CHARS_RE = re.compile(r'[^A-Z0-9\.\-\/,]')
 DIGITS_ONLY_RE = re.compile(r'\D')

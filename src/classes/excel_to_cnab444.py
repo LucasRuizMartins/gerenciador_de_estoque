@@ -101,6 +101,7 @@ def especie_titulo(tipo):
         "NP":                "02",
         "NOTA PROMISSORIA":  "02",
         "NOTA PROMISSORIA FISICA": "06",
+        "NOTA COMERCIAL":    "09",
         "DUPLICATA SERVICO": "14",
         "DUPLICATA DE SERVICO FISICA": "14",
         "CHEQUE":            "51",

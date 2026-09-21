@@ -10,6 +10,7 @@ from src.classes.cnab444_converter import CNAB444Converter
 # pyrefly: ignore [missing-import]
 from src.global_var import MAP_OCORRENCIA, MAP_ESPECIE_TITULO
 
+
 def carregar_configuracoes():
     """Tenta carregar do local, se não, busca no session_state."""
     if "config_fundos" in st.session_state:

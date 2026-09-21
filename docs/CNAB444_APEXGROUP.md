@@ -177,6 +177,8 @@ CB230501.TXT  |  CB2305AE.TXT  |  CB2305E1.TXT
 | `04` | Abatimento (mediante justificativa) – valor em posições 206–218 |
 | `06` | Alteração de vencimento (somente para conciliação; não altera o original) |
 | `14` | Pagamento parcial – valor pago em posições 83–92 |
+| `27` | Baixa Parcial Zerada |
+| `48` | Liquidação Parcial NP |
 | `71` | Baixa por recompra / novo título **com liquidação para a consultoria** – exige contrapartida `81` no mesmo arquivo |
 | `72` | Recompra parcial sem adiantamento |
 | `73` | Recompra parcial com adiantamento |
