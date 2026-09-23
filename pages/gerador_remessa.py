@@ -230,40 +230,126 @@ if arquivo_upload:
         
         # Dicionários de mapeamento (Rótulo amigável -> Código CNAB)
         MAPA_ESPECIES_UI = {f"{str(k).zfill(2)} - {v.upper()}": str(k).zfill(2) for k, v in MAP_ESPECIE_TITULO.items()}
+        MAPA_ESPECIES_INV = {v: k for k, v in MAPA_ESPECIES_UI.items()}
+        
+        # Mapeamento por texto para identificar nomes vindos da planilha
+        MAPA_ESPECIES_TEXTO = {v.upper().strip(): str(k).zfill(2) for k, v in MAP_ESPECIE_TITULO.items()}
+        MAPA_ESPECIES_TEXTO.update({
+            "DUPLICATA": "01",
+            "NP": "02",
+            "NOTA PROMISSORIA": "02",
+            "NOTA PROMISSORIA FISICA": "06",
+            "NOTA COMERCIAL": "09",
+            "DUPLICATA SERVICO": "14",
+            "DUPLICATA DE SERVICO FISICA": "14",
+            "CHEQUE": "51",
+            "CONTRATO": "60",
+            "CONTRATO FISICO": "61",
+            "CONFISSAO DE DIVIDA": "62",
+            "FATURA CARTAO": "65",
+            "FATURA DE CARTAO CREDITO": "65",
+            "CCB DIGITAL": "41",
+            "CCB PRE DIGITAL": "70",
+            "CCB PRE BALCAO": "71",
+            "CCB PRE CETIP": "72",
+            "OUTROS": "73",
+            "CCB FORMALIZACAO FONADA": "74",
+        })
 
         # Reaproveitando do global_var e formatando para a UI
         MAPA_OCORRENCIAS_UI = {f"{k} - {v}": k for k, v in MAP_OCORRENCIA.items()}
+        MAPA_OCORRENCIAS_INV = {k: f"{k} - {v}" for k, v in MAP_OCORRENCIA.items()}
+        MAPA_OCORRENCIAS_TEXTO = {v.upper().strip(): k for k, v in MAP_OCORRENCIA.items()}
+
+        tipos_rec_nao_cadastrados = set()
+        ocorrencias_nao_cadastradas = set()
 
         st.write("### Edição dos Dados da Remessa")
         st.info("💡 Dica: Você pode alterar o tipo e a ocorrência diretamente na tabela.")
-
-        # Mapas invertidos para carregar dados existentes
-        MAPA_ESPECIES_INV = {v: k for k, v in MAPA_ESPECIES_UI.items()}
-        MAPA_OCORRENCIAS_INV = {v: k for k, v in MAPA_OCORRENCIAS_UI.items()}
 
         # Preparação das colunas para o editor
         if "TIPO_RECEBIVEL" not in df.columns:
             df["TIPO_RECEBIVEL"] = "01 - DUPLICATA"
         else:
-            # Tenta converter o que veio do Excel para o rótulo da UI
-            # Se for um nome (ex: DUPLICATA), tenta mapear. Se for código (ex: 01), também.
             def mapear_especie(x):
-                x_str = str(x).strip().zfill(2) if str(x).isdigit() else str(x).upper().strip()
-                # Se já for um código no mapa invertido
-                if x_str in MAPA_ESPECIES_INV: return MAPA_ESPECIES_INV[x_str]
-                # Se for um nome que o conversor antigo conhecia
-                especies_antigas = {"DUPLICATA": "01", "NP": "02", "CHEQUE": "51", "CONTRATO": "60"}
-                cod = especies_antigas.get(x_str, "01")
-                return MAPA_ESPECIES_INV.get(cod, "01 - DUPLICATA")
+                if pd.isna(x) or str(x).strip() == "":
+                    return "01 - DUPLICATA"
+                raw = str(x).strip()
+                if raw in MAPA_ESPECIES_UI:
+                    return raw
+                
+                primeira_parte = raw.split('-')[0].strip().split()[0]
+                if primeira_parte.isdigit():
+                    cod = primeira_parte.zfill(2)
+                    if cod in MAPA_ESPECIES_INV:
+                        return MAPA_ESPECIES_INV[cod]
+                    # Código numérico não cadastrado: mantém o código enviado
+                    rotulo = f"{cod} - [NÃO CADASTRADO]"
+                    tipos_rec_nao_cadastrados.add(cod)
+                    MAPA_ESPECIES_UI[rotulo] = cod
+                    MAPA_ESPECIES_INV[cod] = rotulo
+                    return rotulo
+                
+                txt_limpo = ''.join(c if c.isalnum() or c == ' ' else ' ' for c in raw.upper()).strip()
+                if txt_limpo in MAPA_ESPECIES_TEXTO:
+                    cod = MAPA_ESPECIES_TEXTO[txt_limpo]
+                    return MAPA_ESPECIES_INV.get(cod, f"{cod} - {raw.upper()}")
+                
+                # Texto livre não cadastrado
+                rotulo = f"{raw.upper()} - [NÃO CADASTRADO]"
+                tipos_rec_nao_cadastrados.add(raw)
+                MAPA_ESPECIES_UI[rotulo] = raw[:2].zfill(2)
+                return rotulo
             
             df["TIPO_RECEBIVEL"] = df["TIPO_RECEBIVEL"].apply(mapear_especie)
 
         if "IDENTIFICACAO_OCORRENCIA" not in df.columns:
-            df["IDENTIFICACAO_OCORRENCIA"] = MAPA_OCORRENCIAS_INV.get(config["identificacao_ocorrencia"], "01 - ENTRADA DE TÍTULOS (REMESSA)")
+            cod_padrao = str(config.get("identificacao_ocorrencia", "01")).zfill(2)
+            rotulo_padrao = MAPA_OCORRENCIAS_INV.get(cod_padrao, f"{cod_padrao} - {MAP_OCORRENCIA.get(cod_padrao, '[NÃO CADASTRADO]')}")
+            if cod_padrao not in MAP_OCORRENCIA:
+                ocorrencias_nao_cadastradas.add(cod_padrao)
+                MAPA_OCORRENCIAS_UI[rotulo_padrao] = cod_padrao
+                MAPA_OCORRENCIAS_INV[cod_padrao] = rotulo_padrao
+            df["IDENTIFICACAO_OCORRENCIA"] = rotulo_padrao
         else:
-            df["IDENTIFICACAO_OCORRENCIA"] = df["IDENTIFICACAO_OCORRENCIA"].apply(
-                lambda x: MAPA_OCORRENCIAS_INV.get(str(x).zfill(2), "01 - ENTRADA DE TÍTULOS (REMESSA)")
-            )
+            def mapear_ocorrencia(x):
+                if pd.isna(x) or str(x).strip() == "":
+                    cod_padrao = str(config.get("identificacao_ocorrencia", "01")).zfill(2)
+                    return MAPA_OCORRENCIAS_INV.get(cod_padrao, f"{cod_padrao} - {MAP_OCORRENCIA.get(cod_padrao, '[NÃO CADASTRADO]')}")
+                raw = str(x).strip()
+                if raw in MAPA_OCORRENCIAS_UI:
+                    return raw
+                
+                primeira_parte = raw.split('-')[0].strip().split()[0]
+                if primeira_parte.isdigit():
+                    cod = primeira_parte.zfill(2)
+                    if cod in MAP_OCORRENCIA:
+                        return MAPA_OCORRENCIAS_INV[cod]
+                    # Código numérico não cadastrado: mantém o código enviado
+                    rotulo = f"{cod} - [NÃO CADASTRADO]"
+                    ocorrencias_nao_cadastradas.add(cod)
+                    MAPA_OCORRENCIAS_UI[rotulo] = cod
+                    MAPA_OCORRENCIAS_INV[cod] = rotulo
+                    return rotulo
+                
+                txt_limpo = raw.upper().strip()
+                if txt_limpo in MAPA_OCORRENCIAS_TEXTO:
+                    cod = MAPA_OCORRENCIAS_TEXTO[txt_limpo]
+                    return MAPA_OCORRENCIAS_INV[cod]
+                
+                # Texto não cadastrado
+                rotulo = f"{raw.upper()} - [NÃO CADASTRADO]"
+                ocorrencias_nao_cadastradas.add(raw)
+                MAPA_OCORRENCIAS_UI[rotulo] = raw[:2].zfill(2)
+                return rotulo
+
+            df["IDENTIFICACAO_OCORRENCIA"] = df["IDENTIFICACAO_OCORRENCIA"].apply(mapear_ocorrencia)
+
+        if tipos_rec_nao_cadastrados:
+            st.warning(f"⚠️ **Tipo(s) de Recebível não cadastrado(s) detectado(s):** {', '.join(sorted(tipos_rec_nao_cadastrados))}. O código enviado foi mantido.")
+
+        if ocorrencias_nao_cadastradas:
+            st.warning(f"⚠️ **Código(s) de Ocorrência não cadastrado(s) detectado(s):** {', '.join(sorted(ocorrencias_nao_cadastradas))}. O código enviado foi mantido.")
 
         # OTIMIZAÇÃO: Proteger o Streamlit contra excesso de linhas no st.data_editor (evita travamento de browser)
         limite_editor = 100
@@ -301,9 +387,13 @@ if arquivo_upload:
                 else:
                     df_final = df_editado.copy()
 
-                # Converte os rótulos amigáveis de volta para códigos CNAB
-                df_final["TIPO_RECEBIVEL"] = df_final["TIPO_RECEBIVEL"].map(MAPA_ESPECIES_UI)
-                df_final["IDENTIFICACAO_OCORRENCIA"] = df_final["IDENTIFICACAO_OCORRENCIA"].map(MAPA_OCORRENCIAS_UI)
+                # Converte os rótulos amigáveis de volta para códigos CNAB com fallback resiliente
+                df_final["TIPO_RECEBIVEL"] = df_final["TIPO_RECEBIVEL"].apply(
+                    lambda val: MAPA_ESPECIES_UI.get(val, str(val).split('-')[0].strip().zfill(2))
+                )
+                df_final["IDENTIFICACAO_OCORRENCIA"] = df_final["IDENTIFICACAO_OCORRENCIA"].apply(
+                    lambda val: MAPA_OCORRENCIAS_UI.get(val, str(val).split('-')[0].strip().zfill(2))
+                )
 
                 # Re-converte as colunas de data para datetime64 usando formato explícito DDMMYYYY/brasileiro.
                 # O st.data_editor serializa datas de volta para string no formato americano (ex: 2026-05-18),

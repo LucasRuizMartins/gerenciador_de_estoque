@@ -24,6 +24,7 @@ MAP_CEDENTE = {'01':'pessoa fisica', '02':'pessoa juridica'}
 
 MAP_OCORRENCIA = {
     '01': 'Remessa - Aquisição de títulos',
+    '02': 'Baixa Sem financeiro',
     '04': 'Abatimento',
     '06': 'Alteração de vencimento',
     '11': 'Aquisição de contratos futuros',

@@ -9,8 +9,10 @@ Permite ao usuário:
   5. Inspecionar os recebíveis individuais com filtros
 """
 
+import io
 import pandas as pd
 import streamlit as st
+from datetime import datetime
 # pyrefly: ignore [missing-import]
 from src.data_loader import carregar_arquivo, normalizar_colunas, aplicar_aliases, preparar_colunas_datas, preparar_colunas_valores
 # pyrefly: ignore [missing-import]
@@ -223,7 +225,7 @@ _AGG_COMPRA = {
 }
 
 # ── Por Tipo de Recebível ──
-agrupar_e_exibir(
+_, df_raw_tipo = agrupar_e_exibir(
     df_f, COL_TIPO, _AGG_COMPRA,
     titulo="Por Tipo de Recebível", icone="📑",
     sort_col="Vl_Compra",
@@ -234,7 +236,7 @@ agrupar_e_exibir(
 )
 
 # ── Por Sacado (Top 20) ──
-agrupar_e_exibir(
+_, df_raw_sacado = agrupar_e_exibir(
     df_f, COL_SACADO, _AGG_COMPRA,
     titulo="Por Sacado (Top 20)", icone="👤",
     sort_col="Vl_Compra", top_n=20,
@@ -251,7 +253,7 @@ _AGG_MES_COMPRA = {
     "Vl_Vencimento": (COL_VL_VENC,   "sum"),
 }
 
-agrupar_por_mes(
+_, df_raw_mes_entrada = agrupar_por_mes(
     df_f, COL_ENTRADA, _AGG_MES_COMPRA,
     titulo="Por Mês de Entrada", icone="📆",
     colunas_moeda=["Vl_Compra", "Vl_Vencimento"],
@@ -260,7 +262,7 @@ agrupar_por_mes(
 )
 
 # ── Por Mês de Vencimento ──
-agrupar_por_mes(
+_, df_raw_mes_venc = agrupar_por_mes(
     df_f, COL_DT_VENC, _AGG_MES_COMPRA,
     titulo="Por Mês de Vencimento", icone="📅",
     colunas_moeda=["Vl_Compra", "Vl_Vencimento"],
@@ -278,3 +280,122 @@ with st.expander("🔍 Ver tabela completa de aquisições"):
     df_exibir = df_exibir.loc[:, ~df_exibir.columns.duplicated()]
     st.dataframe(df_exibir.reset_index(drop=True), use_container_width=True)
     st.caption(f"Exibindo {len(df_f):,} registros.")
+
+ 
+# EXPORTAR EXCEL
+ 
+st.divider()
+st.subheader("💾 Exportar")
+
+
+def _formatar_aba_excel(ws, df: pd.DataFrame) -> None:
+    """Aplica formatação visual e de tipo a uma aba do openpyxl.
+
+    - Cabeçalho: fundo azul escuro, texto branco, negrito, centralizado.
+    - Linhas de dados: alternância azul claro / branco (zebra).
+    - Largura de cada coluna ajustada ao conteúdo (mín 10, máx 40).
+    - Formato numérico automático por nome de coluna:
+        * 'Vl.' / 'Compra' / 'Vencimento' → moeda  R$ #,##0.00
+        * 'Deságio' / 'Pct'               → percentual 0.00%
+        * 'Qtd'                            → inteiro   #,##0
+    - Cabeçalho congelado na linha 2.
+    """
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    # ── Paleta ──────────────────────────────────────────────────────────
+    COR_HEADER_BG = "1F4E79"   # azul escuro
+    COR_HEADER_FT = "FFFFFF"   # branco
+    COR_LINHA_PAR = "DCE6F1"   # azul claro
+    COR_LINHA_IMP = "FFFFFF"   # branco
+    COR_BORDA     = "B8CCE4"   # azul médio
+
+    fill_header  = PatternFill("solid", fgColor=COR_HEADER_BG)
+    fill_par     = PatternFill("solid", fgColor=COR_LINHA_PAR)
+    fill_imp     = PatternFill("solid", fgColor=COR_LINHA_IMP)
+    font_header  = Font(bold=True, color=COR_HEADER_FT, name="Calibri", size=11)
+    font_data    = Font(name="Calibri", size=10)
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left   = Alignment(horizontal="left",   vertical="center")
+    align_right  = Alignment(horizontal="right",  vertical="center")
+    thin_side    = Side(style="thin", color=COR_BORDA)
+    borda_fina   = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    # ── Detecta formato numérico por nome de coluna ─────────────────────
+    FMT_MOEDA = '#,##0.00'
+    FMT_PCT   = '0.00%'
+    FMT_INT   = '#,##0'
+
+    def _fmt_para_col(nome: str) -> str | None:
+        n = nome.lower()
+        if any(k in n for k in ("vl.", "valor", "compra", "vencimento")):
+            return FMT_MOEDA
+        if any(k in n for k in ("deságio", "desagio", "pct", "%")):
+            return FMT_PCT
+        if n in ("qtd", "qtde", "quantidade"):
+            return FMT_INT
+        return None
+
+    col_fmts = {i + 1: _fmt_para_col(c) for i, c in enumerate(df.columns)}
+
+    # ── Cabeçalho (linha 1) ─────────────────────────────────────────────
+    for cell in ws[1]:
+        cell.fill      = fill_header
+        cell.font      = font_header
+        cell.alignment = align_center
+        cell.border    = borda_fina
+    ws.row_dimensions[1].height = 20
+
+    # ── Linhas de dados ─────────────────────────────────────────────────
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
+        fill_row = fill_par if row_idx % 2 == 0 else fill_imp
+        for cell in row:
+            cell.fill   = fill_row
+            cell.font   = font_data
+            cell.border = borda_fina
+            fmt = col_fmts.get(cell.column)
+            if fmt:
+                cell.number_format = fmt
+                cell.alignment     = align_right
+            else:
+                cell.alignment     = align_left
+        ws.row_dimensions[row_idx].height = 16
+
+    # ── Largura automática das colunas ───────────────────────────────────
+    for col_idx, col_cells in enumerate(ws.columns, start=1):
+        max_len = max(
+            (len(str(cell.value)) if cell.value is not None else 0)
+            for cell in col_cells
+        )
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(max(max_len + 2, 10), 40)
+
+    # ── Congela cabeçalho ────────────────────────────────────────────────
+    ws.freeze_panes = "A2"
+
+
+if st.button("📥 Gerar Excel", type="primary"):
+    data_atual = datetime.now().strftime("%d_%m_%Y")
+    nome_arquivo = f"relatorio_aquisicao_{data_atual}.xlsx"
+
+    buffer = io.BytesIO()
+
+    abas = [
+        (df_raw_tipo,        "Por Tipo"),
+        (df_raw_sacado,      "Por Sacado (Top 20)"),
+        (df_raw_mes_entrada, "Por Mes Entrada"),
+        (df_raw_mes_venc,    "Por Mes Vencimento"),
+    ]
+
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        for df_aba, nome_aba in abas:
+            if df_aba is not None:
+                df_aba.to_excel(writer, sheet_name=nome_aba, index=False)
+                _formatar_aba_excel(writer.sheets[nome_aba], df_aba)
+
+    buffer.seek(0)
+    st.download_button(
+        label="⬇️ Baixar Excel",
+        data=buffer.getvalue(),
+        file_name=nome_arquivo,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )

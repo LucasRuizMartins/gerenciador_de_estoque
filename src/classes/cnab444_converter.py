@@ -232,14 +232,35 @@ class CNAB444Converter:
         self.mapa_especies = {
             v.upper(): str(k).zfill(2) for k, v in MAP_ESPECIE_TITULO.items()
         }
+        self.mapa_especies.update({
+            "DUPLICATA": "01",
+            "NP": "02",
+            "NOTA PROMISSORIA": "02",
+            "NOTA PROMISSORIA FISICA": "06",
+            "NOTA COMERCIAL": "09",
+            "DUPLICATA SERVICO": "14",
+            "DUPLICATA DE SERVICO FISICA": "14",
+            "CHEQUE": "51",
+            "CONTRATO": "60",
+            "CONTRATO FISICO": "61",
+            "CONFISSAO DE DIVIDA": "62",
+            "FATURA CARTAO": "65",
+            "FATURA DE CARTAO CREDITO": "65",
+            "CCB DIGITAL": "41",
+            "CCB PRE DIGITAL": "70",
+            "CCB PRE BALCAO": "71",
+            "CCB PRE CETIP": "72",
+            "OUTROS": "73",
+            "CCB FORMALIZACAO FONADA": "74",
+        })
 
     def _valida_linha(self, linha: str) -> str:
         if len(linha) != self.LINE_SIZE:
             raise ValueError(f"Linha inválida: {len(linha)} caracteres (esperado {self.LINE_SIZE})")
         return linha
 
-    def _get_especie(self, tipo: str) -> str:
-        if not tipo or pd.isna(tipo):
+    def _get_especie(self, tipo: Any) -> str:
+        if tipo is None or (isinstance(tipo, float) and pd.isna(tipo)):
             return "01"
             
         chave = str(tipo).upper().strip()
@@ -248,18 +269,23 @@ class CNAB444Converter:
         if primeira_parte.isdigit():
             return primeira_parte.zfill(2)[:2]
             
-        chave = ''.join(c if c.isalnum() or c == ' ' else ' ' for c in chave)
-        return self.mapa_especies.get(chave, "01")
+        chave_limpa = ''.join(c if c.isalnum() or c == ' ' else ' ' for c in chave).strip()
+        if chave_limpa in self.mapa_especies:
+            return self.mapa_especies[chave_limpa]
+        return chave_limpa[:2].zfill(2) if chave_limpa else "01"
 
     def _get_especie_vectorized(self, series: pd.Series) -> pd.Series:
         s = series.fillna("").astype(str).str.upper().str.strip()
         token1 = s.str.split('-').str[0].str.strip().str.split().str[0].fillna("")
         is_digit = token1.str.isdigit()
         
-        cleaned_chars = s.str.replace(r'[^A-Z0-9 ]', ' ', regex=True)
-        mapped = cleaned_chars.map(self.mapa_especies).fillna("01")
+        cleaned_chars = s.str.replace(r'[^A-Z0-9 ]', ' ', regex=True).str.strip()
+        mapped = cleaned_chars.map(self.mapa_especies)
         
-        result = np.where(is_digit, token1.str.zfill(2).str.slice(-2), mapped)
+        fallback_cod = cleaned_chars.str.slice(0, 2).str.zfill(2)
+        final_mapped = mapped.fillna(fallback_cod).replace("", "01")
+        
+        result = np.where(is_digit, token1.str.zfill(2).str.slice(-2), final_mapped)
         return pd.Series(result, index=series.index)
 
     def _get_tipo_pessoa(self, doc: str) -> str:

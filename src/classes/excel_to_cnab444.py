@@ -128,8 +128,10 @@ def especie_titulo(tipo):
     if primeira_parte.isdigit():
         return primeira_parte.zfill(2)[:2]
         
-    chave = ''.join(c if c.isalnum() or c == ' ' else ' ' for c in chave)
-    return mapa.get(chave, "01")
+    chave_limpa = ''.join(c if c.isalnum() or c == ' ' else ' ' for c in chave).strip()
+    if chave_limpa in mapa:
+        return mapa[chave_limpa]
+    return chave_limpa[:2].zfill(2) if chave_limpa else "01"
 
 
 def valida_linha(linha):

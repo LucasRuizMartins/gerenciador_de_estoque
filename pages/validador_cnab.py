@@ -35,7 +35,7 @@ header_raw = parser.header
 tem_baixa = False
 for cod in df['identificacao_ocorrencia'].unique():
     desc = MAP_OCORRENCIA.get(cod, "").lower()
-    if "baixa" in desc or "liquidação" in desc or cod in ['14', '27', '48', '71', '72', '73', '74', '75', '76', '77']:
+    if "baixa" in desc or "liquidação" in desc or cod in ['02', '14', '27', '48', '71', '72', '73', '74', '75', '76', '77']:
         tem_baixa = True
         break
 
@@ -92,7 +92,7 @@ st.write("### Identificação de ocorrência")
 
 contagem = df['identificacao_ocorrencia'].value_counts().reset_index()
 contagem.columns = ['Código','Quantidade']
-contagem['Descrição'] = contagem['Código'].map(MAP_OCORRENCIA)
+contagem['Descrição'] = contagem['Código'].apply(lambda cod: MAP_OCORRENCIA.get(str(cod).zfill(2) if str(cod).isdigit() else str(cod), "⚠️ NÃO CADASTRADO"))
 contagem = contagem[['Código','Descrição','Quantidade']]
 
 # Resumo de Espécies
@@ -100,7 +100,7 @@ st.write("### Espécies de Títulos")
 contagem_esp = df['especie_titulo'].value_counts().reset_index()
 contagem_esp.columns = ['Código','Quantidade']
 # Converte código string para int para bater com o MAP_ESPECIE_TITULO
-contagem_esp['Descrição'] = contagem_esp['Código'].apply(lambda x: MAP_ESPECIE_TITULO.get(int(x) if str(x).isdigit() else x, "Desconhecido"))
+contagem_esp['Descrição'] = contagem_esp['Código'].apply(lambda x: MAP_ESPECIE_TITULO.get(int(x) if str(x).isdigit() else x, "⚠️ NÃO CADASTRADO"))
 contagem_esp = contagem_esp[['Código','Descrição','Quantidade']]
 
 col1,col2 = st.columns(2)

@@ -5,6 +5,11 @@ Centraliza o padrão repetido de:
 
 Uso nas pages:
     from src.components.tables import agrupar_e_exibir, agrupar_por_mes
+
+Retorno das funções:
+    Cada função retorna uma tupla (df_display, df_raw):
+    - df_display: DataFrame formatado para exibição (strings de moeda, %, etc.)
+    - df_raw:     DataFrame com valores numéricos brutos (ideal para Excel)
 """
 
 import pandas as pd
@@ -29,7 +34,7 @@ def agrupar_e_exibir(
     col_return_pct: tuple[str, str, str] | None = None,
     nomes_colunas: list[str] | None = None,
     show_divider: bool = True,
-) -> pd.DataFrame | None:
+) -> tuple[pd.DataFrame, pd.DataFrame] | tuple[None, None]:
     """Agrupa, formata e exibe uma tabela Streamlit.
 
     Args:
@@ -53,10 +58,13 @@ def agrupar_e_exibir(
         show_divider: Se True, mostra divider antes do bloco.
 
     Returns:
-        DataFrame formatado ou None se group_col não existir.
+        Tupla (df_display, df_raw):
+        - df_display: DataFrame formatado para exibição (strings)
+        - df_raw:     DataFrame com valores numéricos (para Excel)
+        Retorna (None, None) se group_col não existir.
     """
     if group_col not in df.columns:
-        return None
+        return None, None
 
     # Agrupa
     df_agg = df.groupby(group_col, as_index=False).agg(**agg_specs)
@@ -71,15 +79,22 @@ def agrupar_e_exibir(
     if top_n:
         df_agg = df_agg.head(top_n)
 
+    # Guarda cópia com valores numéricos (antes de formatar) para Excel
+    df_raw = df_agg.copy()
+
     # Deságio: (num - den) / num
     if col_ratio_pct:
         nome, num, den = col_ratio_pct
-        df_agg[nome] = ((df_agg[num] - df_agg[den]) / df_agg[num]).map(fmt_pct)
+        ratio_vals = (df_agg[num] - df_agg[den]) / df_agg[num]
+        df_raw[nome] = ratio_vals          # numérico no raw
+        df_agg[nome] = ratio_vals.map(fmt_pct)
 
     # Retorno: num / den - 1
     if col_return_pct:
         nome, num, den = col_return_pct
-        df_agg[nome] = (df_agg[num] / df_agg[den] - 1).map(fmt_pct)
+        return_vals = df_agg[num] / df_agg[den] - 1
+        df_raw[nome] = return_vals         # numérico no raw
+        df_agg[nome] = return_vals.map(fmt_pct)
 
     # Formatação
     for col in (colunas_moeda or []):
@@ -97,6 +112,8 @@ def agrupar_e_exibir(
     # Renomeia colunas para display
     if nomes_colunas and len(nomes_colunas) == len(df_agg.columns):
         df_agg.columns = nomes_colunas
+        if len(nomes_colunas) == len(df_raw.columns):
+            df_raw.columns = nomes_colunas
 
     # Exibe
     if show_divider:
@@ -105,7 +122,7 @@ def agrupar_e_exibir(
         st.subheader(f"{icone} {titulo}" if icone else titulo)
 
     st.dataframe(df_agg, use_container_width=True, hide_index=True)
-    return df_agg
+    return df_agg, df_raw
 
 
 def agrupar_por_mes(
@@ -119,7 +136,7 @@ def agrupar_por_mes(
     colunas_numero: list[str] | None = None,
     nomes_colunas: list[str] | None = None,
     show_divider: bool = True,
-) -> pd.DataFrame | None:
+) -> tuple[pd.DataFrame, pd.DataFrame] | tuple[None, None]:
     """Agrupa por mês (period) de uma coluna de data e exibe.
 
     Args:
@@ -134,16 +151,22 @@ def agrupar_por_mes(
         show_divider: Se True, mostra divider.
 
     Returns:
-        DataFrame formatado ou None se date_col não existir/for vazia.
+        Tupla (df_display, df_raw):
+        - df_display: DataFrame formatado para exibição (strings)
+        - df_raw:     DataFrame com valores numéricos (para Excel)
+        Retorna (None, None) se date_col não existir/for vazia.
     """
     if date_col not in df.columns or not df[date_col].notna().any():
-        return None
+        return None, None
 
     df_tmp = df.copy()
     col_mes = f"_mes_{date_col}"
     df_tmp[col_mes] = df_tmp[date_col].dt.to_period("M").astype(str)
 
     df_agg = df_tmp.groupby(col_mes, as_index=False).agg(**agg_specs).sort_values(col_mes)
+
+    # Guarda cópia com valores numéricos (antes de formatar) para Excel
+    df_raw = df_agg.copy()
 
     # Formatação
     for col in (colunas_moeda or []):
@@ -156,6 +179,8 @@ def agrupar_por_mes(
 
     if nomes_colunas and len(nomes_colunas) == len(df_agg.columns):
         df_agg.columns = nomes_colunas
+        if len(nomes_colunas) == len(df_raw.columns):
+            df_raw.columns = nomes_colunas
 
     if show_divider:
         st.divider()
@@ -163,4 +188,4 @@ def agrupar_por_mes(
         st.subheader(f"{icone} {titulo}" if icone else titulo)
 
     st.dataframe(df_agg, use_container_width=True, hide_index=True)
-    return df_agg
+    return df_agg, df_raw
