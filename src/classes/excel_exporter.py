@@ -2,8 +2,11 @@ import pandas as pd
 import logging
 # pyrefly: ignore [missing-import]
 from src.metricas import MetricasGlobais, MetricasMensais, MetricasVencimento
+# pyrefly: ignore [missing-import]
+from src.components.excel_formatter import formatar_aba
 
 logger = logging.getLogger(__name__)
+
 
 class ExcelExporter:
     """Classe responsável por exportar os resultados da análise para Excel."""
@@ -14,31 +17,31 @@ class ExcelExporter:
     def exportar(self, output) -> bool:
         """Exporta métricas para Excel (arquivo ou buffer)."""
         try:
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df_relatorio = self._construir_dataframe_relatorio()
 
                 if df_relatorio.empty:
                     logger.warning("DataFrame principal vazio!")
 
                 df_relatorio.to_excel(writer, sheet_name='Relatório Consolidado', index=False)
-                self._formatar_planilha_excel(writer, df_relatorio)
+                formatar_aba(writer.sheets['Relatório Consolidado'], df_relatorio)
 
                 df_cedentes = self.analise.obter_cedentes_agrupados()
                 if not df_cedentes.empty:
                     df_cedentes.to_excel(writer, sheet_name='Cedentes', index=False)
+                    formatar_aba(writer.sheets['Cedentes'], df_cedentes)
 
                 df_recebiveis = self.analise.obter_recebiveis_agrupados()
                 if not df_recebiveis.empty:
                     df_recebiveis.to_excel(writer, sheet_name='Recebíveis', index=False)
-
-                writer.close()
+                    formatar_aba(writer.sheets['Recebíveis'], df_recebiveis)
 
             return True
 
         except Exception as e:
             logger.error("Erro na exportação: %s", e)
         return False
-        
+
     def _construir_dataframe_relatorio(self) -> pd.DataFrame:
         """Constrói DataFrame com todas as métricas."""
         metricas = [
@@ -65,10 +68,10 @@ class ExcelExporter:
             "Ticket Médio Presente a total",
             "Ticket Médio Nominal a vencer",
             "Ticket Médio Nominal a vencido",
-            "Ticket Médio Nominal a total",            
+            "Ticket Médio Nominal a total",
             "taxa cessao mediana a vencer",
             "taxa cessao mediana vencido",
-            "taxa cessao mediana total",            
+            "taxa cessao mediana total",
             "Ultima Quinzena Ticket Médio Aquisicao a vencer",
             "Ultima Quinzena Ticket Médio Aquisicao a vencido",
             "Ultima Quinzena Ticket Médio Aquisicao a total",
@@ -86,22 +89,22 @@ class ExcelExporter:
             "Ultima Quinzena Prazo Médio A vencer",
             "Taxa Média do Mês",
         ]
-        
+
         # Adicionar faixas de vencimento
         for situacao in ["A Vencer", "Vencido", "PDD A Vencer", "PDD Vencido"]:
             for faixa in ["0-15", "16-30", "31-60", "61-90", "91-120", "121-150", "151-180", "181-360", "+ 360"]:
                 metricas.append(f"{situacao} {faixa} dias")
-        
+
         valores_totais = self._obter_valores_totais()
-        
+
         dados = {"Métrica": metricas, "Valor Total": valores_totais}
-        
+
         df = pd.DataFrame(dados)
-        
+
         # Adicionar colunas por tipo
         for tipo in sorted(self.analise.metricas_globais_por_tipo.keys()):
             df[tipo] = self._obter_valores_por_tipo(tipo)
-        
+
         return df
 
     def _obter_valores_totais(self) -> list:
@@ -109,7 +112,7 @@ class ExcelExporter:
         m = self.analise.metricas_globais
         mm = self.analise.metricas_mensais
         mv = self.analise.metricas_vencimento
-        
+
         valores = [
             m.nome_fundo,
             mm.data_ref.strftime("%Y/%m/%d"),
@@ -135,11 +138,9 @@ class ExcelExporter:
             m.ticket_medio_nominal_a_vencer,
             m.ticket_medio_nominal_vencido,
             m.ticket_medio_nominal_total,
-            
             m.mediana_a_vencer,
             m.mediana_vencido,
             m.mediana_valor_aquisicao,
-            
             m.ultima_quinzena_ticket_medio_aquisicao_a_vencer,
             m.ultima_quinzena_ticket_medio_aquisicao_vencido,
             m.ultima_quinzena_ticket_medio_aquisicao_total,
@@ -157,31 +158,31 @@ class ExcelExporter:
             m.ultima_quinzena_prazo_medio_a_vencer,
             mm.taxa_media_mes,
         ]
-        
+
         # Adicionar valores de vencimento
         faixas_attr = [
             ('a_vencer', mv), ('vencido', mv),
             ('pdd_a_vencer', mv), ('pdd_vencido', mv)
         ]
-        
+
         intervalos = ['0_15', '16_30', '31_60', '61_90', '91_120', '121_150', '151_180', '181_360', 'acima_360']
-        
+
         for prefixo, obj in faixas_attr:
             for intervalo in intervalos:
                 attr = f'{prefixo}_{intervalo}'
                 valores.append(getattr(obj, attr, 0))
-        
+
         return valores
-    
+
     def _obter_valores_por_tipo(self, tipo: str) -> list:
         """Obtém lista de valores para um tipo específico."""
         mg = self.analise.metricas_globais_por_tipo.get(tipo, MetricasGlobais())
         mm = self.analise.metricas_mensais_por_tipo.get(tipo, MetricasMensais())
         mv = self.analise.metricas_vencimento_por_tipo.get(tipo, MetricasVencimento())
-        
+
         valores = [
-            self.analise.metricas_globais.nome_fundo,  # Nome Fundo
-            self.analise.metricas_mensais.data_ref.strftime("%Y/%m/%d"),  # Data Referência
+            self.analise.metricas_globais.nome_fundo,
+            self.analise.metricas_mensais.data_ref.strftime("%Y/%m/%d"),
             mg.valor_nominal,
             mg.valor_vencido,
             mg.valor_a_vencer,
@@ -204,11 +205,9 @@ class ExcelExporter:
             mg.ticket_medio_nominal_a_vencer,
             mg.ticket_medio_nominal_vencido,
             mg.ticket_medio_nominal_total,
-            
             mg.mediana_a_vencer,
             mg.mediana_vencido,
-            mg.mediana_valor_aquisicao,  
-            
+            mg.mediana_valor_aquisicao,
             mg.ultima_quinzena_ticket_medio_aquisicao_a_vencer,
             mg.ultima_quinzena_ticket_medio_aquisicao_vencido,
             mg.ultima_quinzena_ticket_medio_aquisicao_total,
@@ -226,64 +225,16 @@ class ExcelExporter:
             mg.ultima_quinzena_prazo_medio_a_vencer,
             mm.taxa_media_mes,
         ]
-        
-        # Adicionar valores de vencimento com os nomes corretos dos atributos
+
         intervalos = ['0_15', '16_30', '31_60', '61_90', '91_120', '121_150', '151_180', '181_360', 'acima_360']
-        
-        # A Vencer
+
         for intervalo in intervalos:
-            attr = f'a_vencer_{intervalo}'
-            valores.append(getattr(mv, attr, 0))
-        
-        # Vencido
+            valores.append(getattr(mv, f'a_vencer_{intervalo}', 0))
         for intervalo in intervalos:
-            attr = f'vencido_{intervalo}'
-            valores.append(getattr(mv, attr, 0))
-        
-        # PDD A Vencer
+            valores.append(getattr(mv, f'vencido_{intervalo}', 0))
         for intervalo in intervalos:
-            attr = f'pdd_a_vencer_{intervalo}'
-            valores.append(getattr(mv, attr, 0))
-        
-        # PDD Vencido
+            valores.append(getattr(mv, f'pdd_a_vencer_{intervalo}', 0))
         for intervalo in intervalos:
-            attr = f'pdd_vencido_{intervalo}'
-            valores.append(getattr(mv, attr, 0))
-        
+            valores.append(getattr(mv, f'pdd_vencido_{intervalo}', 0))
+
         return valores
-        
-    def _formatar_planilha_excel(self, writer, df: pd.DataFrame) -> None:
-        """Aplica formatação ao arquivo Excel."""
-        workbook = writer.book
-        worksheet = writer.sheets['Relatório Consolidado']
-        
-        # Formatos
-        money_fmt = workbook.add_format({'num_format': '#,##0.00'})
-        percent_fmt = workbook.add_format({'num_format': '0.00%'})
-        integer_fmt = workbook.add_format({'num_format': '#,##0'})
-        
-        # Formato monetário padrão
-        for col_num in range(1, len(df.columns)):
-            worksheet.set_column(col_num, col_num, 18, money_fmt)
-        
-        # Formato inteiro para contagens
-        metricas_inteiro = ["Quantidade de Titulos", "Quantidade Aquisição no Mês",
-                           "Quantidade de Titulos a vencer", "Quantidade de titulos vencido",
-                           "Total de Sacados", "Total de Cedentes"]
-        
-        for metrica in metricas_inteiro:
-            indices = df[df['Métrica'] == metrica].index
-            if len(indices) > 0:
-                row = indices[0] + 1
-                for col_num in range(1, len(df.columns)):
-                    worksheet.write(row, col_num, df.iloc[indices[0], col_num], integer_fmt)
-        
-        # Formato percentual para taxa
-        indices_taxa = df[df['Métrica'] == 'Taxa Média do Mês'].index
-        if len(indices_taxa) > 0:
-            row = indices_taxa[0] + 1
-            for col_num in range(1, len(df.columns)):
-                worksheet.write(row, col_num, df.iloc[indices_taxa[0], col_num], percent_fmt)
-        
-        # Largura da coluna de métricas
-        worksheet.set_column(0, 0, 40)

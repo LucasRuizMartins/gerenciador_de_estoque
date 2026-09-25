@@ -17,6 +17,8 @@ import streamlit as st
 from src.data_loader import carregar_arquivo, normalizar_colunas, aplicar_aliases, preparar_colunas_datas, preparar_colunas_valores
 # pyrefly: ignore [missing-import]
 from src.formatting import fmt_moeda, fmt_numero, fmt_pct
+# pyrefly: ignore [missing-import]
+from src.components.excel_formatter import formatar_aba
 
 # ── Constantes de colunas ──────────────────────────────────────
 COL_DATA_MOV    = "DATA MOVIMENTO"
@@ -428,75 +430,77 @@ st.markdown("Baixe todas as informações exibidas na página em um único arqui
 
 
 def gerar_excel_exportacao(df_dados: pd.DataFrame, df_faixas_raw: pd.DataFrame | None) -> bytes:
-    """Gera um arquivo Excel com múltiplas abas contendo todos os dados da página."""
+    """Gera um arquivo Excel formatado com múltiplas abas contendo todos os dados da página."""
     output = io.BytesIO()
 
+    # Coleta todas as abas: (DataFrame_raw, nome_aba)
+    abas: list[tuple[pd.DataFrame, str]] = []
+
+    # Aba 1 — Por Situação
+    if COL_SITUACAO in df_dados.columns:
+        df_sit = df_dados.groupby(COL_SITUACAO, as_index=False).agg(**_AGG_LIQ)
+        df_sit["Retorno"] = df_sit["Vl_Pago"] / df_sit["Vl_Aquisicao"] - 1
+        df_sit.columns = ["Situação", "Qtd", "Vl. Aquisição", "Vl. Vencimento", "Vl. Pago", "Retorno"]
+        abas.append((df_sit, "Por Situaçao"))
+
+    # Aba 2 — Por Cedente
+    if COL_CEDENTE in df_dados.columns:
+        df_ced = df_dados.groupby(COL_CEDENTE, as_index=False).agg(**_AGG_LIQ)
+        df_ced["Retorno"] = df_ced["Vl_Pago"] / df_ced["Vl_Aquisicao"] - 1
+        df_ced.columns = ["Cedente", "Qtd", "Vl. Aquisição", "Vl. Vencimento", "Vl. Pago", "Retorno"]
+        abas.append((df_ced, "Por Cedente"))
+
+    # Aba 3 — Por Mês de Vencimento
+    if COL_DT_VENC in df_dados.columns and df_dados[COL_DT_VENC].notna().any():
+        df_mv = df_dados.copy()
+        df_mv["Mes Vencimento"] = df_mv[COL_DT_VENC].dt.to_period("M").astype(str)
+        df_mv = df_mv.groupby("Mes Vencimento", as_index=False).agg(**_AGG_LIQ).sort_values("Mes Vencimento")
+        df_mv.columns = ["Mes Vencimento", "Qtd", "Vl. Aquisição", "Vl. Vencimento", "Vl. Pago"]
+        abas.append((df_mv, "Por Mes Vencimento"))
+
+    # Aba 4 — Por Mês de Aquisição
+    if COL_DT_AQUIS in df_dados.columns and df_dados[COL_DT_AQUIS].notna().any():
+        df_ma = df_dados.copy()
+        df_ma["Mes Aquisicao"] = df_ma[COL_DT_AQUIS].dt.to_period("M").astype(str)
+        df_ma = df_ma.groupby("Mes Aquisicao", as_index=False).agg(**_AGG_LIQ).sort_values("Mes Aquisicao")
+        df_ma.columns = ["Mes Aquisição", "Qtd", "Vl. Aquisição", "Vl. Vencimento", "Vl. Pago"]
+        abas.append((df_ma, "Por Mes Aquisicao"))
+
+    # Aba 5 — Prazo de Liquidação
+    if COL_DATA_MOV in df_dados.columns and df_dados[COL_DATA_MOV].notna().any():
+        _meses_exp = sorted(
+            df_dados[COL_DATA_MOV].dropna()
+            .dt.to_period("M")
+            .unique()
+            .astype(str)
+            .tolist()
+        )
+        blocos: list[pd.DataFrame] = []
+        for mes_periodo in _meses_exp:
+            _mask = df_dados[COL_DATA_MOV].dt.to_period("M").astype(str) == mes_periodo
+            _df_faixas_mes = calcular_faixas_atraso(df_dados[_mask])
+            if _df_faixas_mes is None:
+                continue
+            # Data como datetime.date — filtrável nativamente no Excel sem hora
+            _df_faixas_mes.insert(0, "Data Referencia", pd.Timestamp(f"{mes_periodo}-01").date())
+            blocos.append(_df_faixas_mes)
+
+        if blocos:
+            df_exp_faixas = pd.concat(blocos, ignore_index=True)
+            df_exp_faixas = df_exp_faixas.rename(columns={
+                "FAIXA": "Faixa de Prazo",
+                "Qtd_Titulos": "Qtd. Títulos",
+                "Maior_Atraso_Dias": "Maior Atraso (dias)",
+                "%_Qtd": "% por Quantidade",
+                "Vl_Pago": "Vl. Pago",
+            })
+            abas.append((df_exp_faixas, "Prazo de Liquidacao"))
+
+    # Grava tudo com formatação
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-
-        # Aba 1 — Dados Brutos (filtrados)
-        # colunas_exp = list(dict.fromkeys(c for c in COLUNAS_ESPERADAS if c in df_dados.columns))
-        # df_dados[colunas_exp].to_excel(writer, sheet_name="Dados Brutos", index=False)
-
-        # Aba 2 — Por Situação
-        if COL_SITUACAO in df_dados.columns:
-            df_sit = df_dados.groupby(COL_SITUACAO, as_index=False).agg(**_AGG_LIQ)
-            df_sit.columns = ["Situação", "Qtd", "Vl. Aquisição", "Vl. Vencimento", "Vl. Pago"]
-            df_sit.to_excel(writer, sheet_name="Por Situação", index=False)
-
-        # Aba 3 — Por Cedente
-        if COL_CEDENTE in df_dados.columns:
-            df_ced = df_dados.groupby(COL_CEDENTE, as_index=False).agg(**_AGG_LIQ)
-            df_ced.columns = ["Cedente", "Qtd", "Vl. Aquisição", "Vl. Vencimento", "Vl. Pago"]
-            df_ced.to_excel(writer, sheet_name="Por Cedente", index=False)
-
-        # Aba 4 — Por Mês de Vencimento
-        if COL_DT_VENC in df_dados.columns and df_dados[COL_DT_VENC].notna().any():
-            df_mv = df_dados.copy()
-            df_mv["Mês Vencimento"] = df_mv[COL_DT_VENC].dt.to_period("M").astype(str)
-            df_mv = df_mv.groupby("Mês Vencimento", as_index=False).agg(**_AGG_LIQ).sort_values("Mês Vencimento")
-            df_mv.columns = ["Mês Vencimento", "Qtd", "Vl. Aquisição", "Vl. Vencimento", "Vl. Pago"]
-            df_mv.to_excel(writer, sheet_name="Por Mês Vencimento", index=False)
-
-        # Aba 5 — Por Mês de Aquisição
-        if COL_DT_AQUIS in df_dados.columns and df_dados[COL_DT_AQUIS].notna().any():
-            df_ma = df_dados.copy()
-            df_ma["Mês Aquisição"] = df_ma[COL_DT_AQUIS].dt.to_period("M").astype(str)
-            df_ma = df_ma.groupby("Mês Aquisição", as_index=False).agg(**_AGG_LIQ).sort_values("Mês Aquisição")
-            df_ma.columns = ["Mês Aquisição", "Qtd", "Vl. Aquisição", "Vl. Vencimento", "Vl. Pago"]
-            df_ma.to_excel(writer, sheet_name="Por Mês Aquisição", index=False)
-
-        # Aba 6 — Prazo de Liquidação: uma linha por faixa por mês de competência
-        if COL_DATA_MOV in df_dados.columns and df_dados[COL_DATA_MOV].notna().any():
-            _meses_exp = sorted(
-                df_dados[COL_DATA_MOV].dropna()
-                .dt.to_period("M")
-                .unique()
-                .astype(str)
-                .tolist()
-            )
-            blocos: list[pd.DataFrame] = []
-            for mes_periodo in _meses_exp:
-                _mask = df_dados[COL_DATA_MOV].dt.to_period("M").astype(str) == mes_periodo
-                _df_mes = df_dados[_mask]
-                _df_faixas_mes = calcular_faixas_atraso(_df_mes)
-                if _df_faixas_mes is None:
-                    continue
-                # Data como datetime.date — filtrável nativamente no Excel sem hora
-                _df_faixas_mes.insert(0, "Data Referência", pd.Timestamp(f"{mes_periodo}-01").date())
-                blocos.append(_df_faixas_mes)
-
-            if blocos:
-                df_exp_faixas = pd.concat(blocos, ignore_index=True)
-                df_exp_faixas = df_exp_faixas.rename(columns={
-                    "Data Referência": "Data Referência",
-                    "FAIXA": "Faixa de Prazo",
-                    "Qtd_Titulos": "Qtd. Títulos",
-                    "Maior_Atraso_Dias": "Maior Atraso (dias)",
-                    "%_Qtd": "% por Quantidade",
-                    "Vl_Pago": "Vl. Pago",
-                })
-                df_exp_faixas.to_excel(writer, sheet_name="Prazo de Liquidação", index=False)
-
+        for df_aba, nome_aba in abas:
+            df_aba.to_excel(writer, sheet_name=nome_aba, index=False)
+            formatar_aba(writer.sheets[nome_aba], df_aba)
 
     return output.getvalue()
 
