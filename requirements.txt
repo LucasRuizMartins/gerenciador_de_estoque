@@ -6,13 +6,14 @@ ruff
 pytest
 pytest-mock
 
-#------- Data
+#------- Data / UI
 pandas
 numpy
 openpyxl
 xlsxwriter
 humanize
 plotly
+streamlit
 
 #------- Machine Learning
 scikit-learn

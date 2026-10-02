@@ -29,7 +29,12 @@ body = resultado["body"]
 df = body["dataframe"]
 erros = body["erros"]
 trailer_raw = resultado["trailer"]
-header_raw = parser.header  
+header_raw = parser.header
+
+# ── Detecção da variante CNAB ────────────────────
+# Na variante QI, as posições 377-391 do header contêm CNPJ Emissor (não é branco)
+_header_cnpj_emissor = header_raw[377:391].strip() if len(header_raw) >= 391 else ""
+_variante_detectada = "QI_444" if _header_cnpj_emissor.isdigit() and len(_header_cnpj_emissor) > 0 else "APEX_444"
 
 # ── Detecção Automática de Finalidade ───────────
 tem_baixa = False
@@ -40,8 +45,8 @@ for cod in df['identificacao_ocorrencia'].unique():
         break
 
 tipo_arquivo = st.radio(
-    "**Finalidade deste arquivo:**", 
-    ["Cessão (Aquisição)", "Liquidação (Baixas)"], 
+    "**Finalidade deste arquivo:**",
+    ["Cessão (Aquisição)", "Liquidação (Baixas)"],
     index=1 if tem_baixa else 0,
     horizontal=True,
     help="Detectado automaticamente com base nas ocorrências do arquivo."
@@ -63,8 +68,8 @@ df['prazo'] = (df['data_vencimento'] - df['data_aquisicao']).dt.days
 df['prazo'] = df['prazo'].apply(lambda x: max(x, 1)) # Mínimo 1 dia para evitar divisão por zero
 
 df['taxa_am'] = df.apply(
-    lambda r: ac.calcular_taxa(r['valor_nominal'], r['valor_aquisicao'], r['prazo']) 
-    if r['valor_aquisicao'] > 0 else 0, 
+    lambda r: ac.calcular_taxa(r['valor_nominal'], r['valor_aquisicao'], r['prazo'])
+    if r['valor_aquisicao'] > 0 else 0,
     axis=1
 )
 df['taxa_aa'] = df['taxa_am'].apply(ac.converter_para_anual)
@@ -72,11 +77,17 @@ df['taxa_aa'] = df['taxa_am'].apply(ac.converter_para_anual)
 # ── Header ─────────────────────────────────────
 st.subheader("📋 Cabeçalho")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col_var = st.columns(4)
 
 col1.metric("Banco", header["banco"])
 col2.metric("Nº do Banco", header["numero_banco"])
 col3.metric("Data da operação", header["data_operacao"].strftime("%d/%m/%Y"))
+col_var.metric(
+    "Padrão detectado",
+    _variante_detectada,
+    help="Detectado automaticamente pelo campo CNPJ Emissor (pos 378–391) do header. "
+         "APEX_444 = branco; QI_444 = CNPJ numérico."
+)
 
 col1, col2 = st.columns(2)
 col1.metric("Gestora", header["gestora"])
@@ -125,7 +136,7 @@ col6.metric("Contagem de Cedentes", f"{df['cedente'].nunique():,}")
 # ── Análise de Taxas e Projeções ────────────────
 if tipo_arquivo == "Cessão (Aquisição)":
     st.subheader("📈 Análise de Taxas e Projeções")
-    
+
     # Preparar dados para o módulo analise_cnab
     titulos_dict = df.rename(columns={'valor_nominal': 'vf', 'valor_aquisicao': 'vp'}).to_dict('records')
     taxa_media = ac.taxa_equivalente_total(titulos_dict)
@@ -139,17 +150,17 @@ if tipo_arquivo == "Cessão (Aquisição)":
     with c2:
         # Slider com precisão de 0.01
         nova_taxa_pct = st.slider("Simular Nova Taxa (% a.m.)", 0.0, 15.0, float(taxa_media*100), 0.01, format="%.4f")
-        
+
         # Input numérico para ajuste ultra-preciso
         nova_taxa_pct = st.number_input("Ajuste Fino da Taxa (% a.m.)", value=nova_taxa_pct, step=0.0001, format="%.4f")
-        
+
         nova_taxa = nova_taxa_pct / 100
         nova_taxa_aa = ac.converter_para_anual(nova_taxa)
-        
+
         st.write(f"📈 Taxa Simulada: **{nova_taxa_pct:.4f}% a.m.** | **{nova_taxa_aa*100:.2f}% a.a.**")
-        
+
         projecao = ac.projetar_nova_taxa(titulos_dict, nova_taxa)
-        
+
         sc1, sc2 = st.columns(2)
         sc1.metric("Novo VP Total", fmt.format_br(projecao['total_novo_vp']))
         sc2.metric("Diferença Total", fmt.format_br(projecao['diferenca']), delta=f"{projecao['diferenca']:.2f}")

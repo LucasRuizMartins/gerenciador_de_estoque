@@ -6,7 +6,7 @@ import os
 from io import BytesIO
 from datetime import datetime
 # pyrefly: ignore [missing-import]
-from src.classes.cnab444_converter import CNAB444Converter
+from src.classes.cnab444_converter import CNAB444Converter, CnabVariant
 # pyrefly: ignore [missing-import]
 from src.global_var import MAP_OCORRENCIA, MAP_ESPECIE_TITULO
 
@@ -91,18 +91,46 @@ with st.sidebar.expander("🎯 Parâmetros da Remessa"):
     
     config["valor_retencao"] = st.number_input("Valor Retenção", value=config["valor_retencao"])
 
+# Padrão CNAB a ser gerado
+st.sidebar.markdown("---")
+st.sidebar.subheader("🏛️ Padrão CNAB")
+_variante_label = st.sidebar.radio(
+    "Variante do layout:",
+    options=["APEX_444", "QI_444"],
+    captions=["BRL Trust / APEX GROUP V3", "QI (Singulare) — ago/2025"],
+    horizontal=False,
+    index=0,
+)
+cnab_variant = CnabVariant(_variante_label)
+
+if _variante_label == "QI_444":
+    st.sidebar.info(
+        "💡 **Mesmo Excel funciona para ambos os padrões.**\n\n"
+        "No padrão QI, a coluna **`ENDERECO`** é usada como *Logradouro* (16 chars). "
+        "Para preencher *Bairro*, *Cidade* e *Estado*, adicione as colunas `BAIRRO`, `CIDADE`, `ESTADO` na planilha."
+    )
+
 # Template de Excel na barra lateral
 st.sidebar.markdown("---")
 st.sidebar.subheader("📄 Template")
 
 @st.cache_data
-def gerar_template_excel():
-    colunas = [
-        "NOME_CEDENTE", "DOC_CEDENTE", "NOME_SACADO", "DOC_SACADO", 
-        "ENDERECO", "CEP", "VALOR_NOMINAL", 
-        "VALOR_PAGO","VALOR_PRESENTE", "VALOR_AQUISICAO", "DATA_VENCIMENTO_AJUSTADA", 
-        "DATA_EMISSAO", "DATA_AQUISICAO", "NU_DOCUMENTO", "SEU_NUMERO","IDENTIFICACAO_OCORRENCIA","TIPO_RECEBIVEL"
+def gerar_template_excel(variant: str = "APEX_444"):
+    colunas_apex = [
+        "NOME_CEDENTE", "DOC_CEDENTE", "NOME_SACADO", "DOC_SACADO",
+        "ENDERECO", "CEP", "VALOR_NOMINAL",
+        "VALOR_PAGO", "VALOR_PRESENTE", "VALOR_AQUISICAO", "DATA_VENCIMENTO_AJUSTADA",
+        "DATA_EMISSAO", "DATA_AQUISICAO", "NU_DOCUMENTO", "SEU_NUMERO",
+        "IDENTIFICACAO_OCORRENCIA", "TIPO_RECEBIVEL"
     ]
+    colunas_qi = [
+        "NOME_CEDENTE", "DOC_CEDENTE", "NOME_SACADO", "DOC_SACADO",
+        "LOGRADOURO", "BAIRRO", "CIDADE", "ESTADO", "CEP", "VALOR_NOMINAL",
+        "VALOR_PAGO", "VALOR_PRESENTE", "VALOR_AQUISICAO", "DATA_VENCIMENTO_AJUSTADA",
+        "DATA_EMISSAO", "DATA_AQUISICAO", "NU_DOCUMENTO", "SEU_NUMERO",
+        "IDENTIFICACAO_OCORRENCIA", "TIPO_RECEBIVEL"
+    ]
+    colunas = colunas_qi if variant == "QI_444" else colunas_apex
     df_template = pd.DataFrame(columns=colunas)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -111,8 +139,8 @@ def gerar_template_excel():
 
 st.sidebar.download_button(
     label="📥 Baixar Planilha Modelo",
-    data=gerar_template_excel(),
-    file_name="modelo_remessa_cnab444.xlsx",
+    data=gerar_template_excel(variant=_variante_label),
+    file_name=f"modelo_remessa_cnab444_{_variante_label.lower()}.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     use_container_width=True
 )
@@ -448,7 +476,7 @@ if arquivo_upload:
                 temp_path = temp_file.name
                 
                 try:
-                    converter = CNAB444Converter(config)
+                    converter = CNAB444Converter(config, variant=cnab_variant)
                     # Processa e grava o DataFrame em chunks de 50.000 linhas
                     converter.converter_para_fluxo(df_final, temp_file, chunk_size=50000)
                     temp_file.close()
