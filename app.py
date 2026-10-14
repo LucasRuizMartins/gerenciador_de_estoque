@@ -96,7 +96,13 @@ pagina_gerador_remessa = st.Page(
     icon="📄"
 )
 
-pg = st.navigation([pagina_estoque, pagina_liquidacoes, pagina_aquisicao, pagina_pdd, pagina_classificador, pagina_leitor_cnab, pagina_gerador_remessa])
+pagina_gerador_liquidacao = st.Page(
+    "pages/gerador_liquidacao.py",
+    title="Gerador de Liquidação",
+    icon="💰"
+)
+
+pg = st.navigation([pagina_estoque, pagina_liquidacoes, pagina_aquisicao, pagina_pdd, pagina_classificador, pagina_leitor_cnab, pagina_gerador_remessa, pagina_gerador_liquidacao])
 
 
 pg.run()

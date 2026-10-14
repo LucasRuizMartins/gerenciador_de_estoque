@@ -11,6 +11,7 @@ O projeto é dividido em páginas especializadas para cada etapa da operação:
 ### 🏦 Remessas e CNAB
 *   **Gerador de Remessa (`gerador_remessa.py`):** Interface para converter planilhas Excel e arquivos CSV no padrão CNAB 444, com seleção dinâmica de fundos, edição de ocorrências e motor vetorizado otimizado para lidar com grandes bases (700k+ registros) sem estouro de memória.
 *   **Validador de CNAB (`validador_cnab.py`):** Leitor técnico de arquivos `.REM` ou `.RET`. Agora com **Inteligência Financeira**: detecta automaticamente se o arquivo é de Cessão ou Liquidação, calcula taxas implícitas (a.m. e a.a.) por título e permite simular o impacto de novas taxas no Valor Presente (VP).
+*   **Gerador de Liquidação (`gerador_liquidacao.py`):** Gera CNAB 444 de **Liquidação a partir de um arquivo de estoque** (`.csv`, `.zip`, `.xlsx`). Fluxo: (1) upload do estoque; (2) escolha do vencimento — data específica ou todos os vencidos até uma data; (3) tabela editável com valor pago (padrão = valor nominal), tipo de recebível (mapeado do estoque para o código numérico CNAB), tipo de baixa (padrão `75 - Baixa por depósito cedente`) e data de liquidação; (4) geração do `.REM` com o mesmo motor da remessa (variantes APEX_444 e QI_444). Permite excluir títulos (coluna *Incluir*) e aplicar tipo de baixa/recebível em lote a todos ou a títulos marcados (coluna *Lote*). Tipos de recebível sem correspondência assumem `01 - DUPLICATA` com aviso; para ampliar o mapeamento, edite `MAPA_TIPO_EXATO` em `src/classes/liquidacao_estoque.py`.
 
 ### 📈 Análise de Risco e Carteira
 *   **Cálculo de PDD (`calcular_pdd.py`):** Interface para processamento de arquivos de histórico e cálculo automático de Provisão para Devedores Duvidosos (PDD) baseada em atrasos.
@@ -44,6 +45,7 @@ A lógica de negócio está encapsulada em classes robustas dentro de `src/class
     *   **`MetricasAggregator`**: Centraliza o cálculo de KPIs, tickets médios e medianas de rentabilidade.
     *   **`ExcelExporter`**: Gerencia a geração de relatórios formatados em `.xlsx`.
 *   **`AnalisePDD`**: Implementa as regras de provisionamento financeiro, transformando dias de atraso em valores de reserva técnica.
+*   **`liquidacao_estoque` (módulo)**: Lógica pura (sem Streamlit) da liquidação por estoque: normalização das colunas do estoque, filtro de vencimento, mapeamento tipo de recebível → código CNAB (exato + aproximação por palavras-chave) e preparação do DataFrame para o `CNAB444Converter`.
 *   **`AnaliseCNAB`**: Motor de análise financeira para arquivos CNAB.
     *   **Taxa de Equilíbrio (Breakeven)**: Calcula a taxa exata que iguala o montante da carteira via método iterativo.
     *   **Simulação de Impacto**: Projeta variações no Valor Presente baseadas em mudanças de taxa.
@@ -59,6 +61,7 @@ A lógica de negócio está encapsulada em classes robustas dentro de `src/class
 ```text
 ├── pages/                       # Interface do Usuário (Streamlit)
 │   ├── gerador_remessa.py       # Geração de remessas CNAB
+│   ├── gerador_liquidacao.py    # CNAB de liquidação a partir do estoque
 │   ├── validador_cnab.py        # Leitura e auditoria de CNAB
 │   ├── calcular_pdd.py          # Cálculo de provisão (risco)
 │   ├── pagina_estoque.py        # Dashboard de títulos ativos
@@ -73,6 +76,7 @@ A lógica de negócio está encapsulada em classes robustas dentro de `src/class
 │   │   ├── excel_exporter.py    # Exportador de relatórios 
 │   │   ├── analise_pdd.py       # Cálculo de risco
 │   │   ├── cnab444_converter.py
+│   │   ├── liquidacao_estoque.py # Preparação do estoque p/ liquidação
 │   │   ├── SingulareParser.py
 │   │   └── Formater.py
 │   ├── components/
@@ -136,6 +140,13 @@ pytest tests/unit/
 ---
 
 ## 📝 Changelog
+
+### v — 14/10/2026
+
+#### Novo: CNAB de Liquidação a partir do Estoque
+- **`gerador_liquidacao.py`** — nova página que lê o estoque, filtra por vencimento (data específica ou vencidos), permite ajustes na tabela (valor pago, tipo de recebível, tipo de baixa, exclusão de títulos, ações em lote) e gera o CNAB 444.
+- **`liquidacao_estoque.py`** — módulo com a lógica de negócio e mapeamento de tipo de recebível (exato + aproximado).
+- Testes em `tests/unit/test_liquidacao_estoque.py`.
 
 ### v — 02/06/2026
 
