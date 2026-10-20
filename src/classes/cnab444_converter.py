@@ -274,6 +274,10 @@ class CNAB444Converter:
             "CCB FORMALIZACAO FONADA": "74",
             # Espécies adicionais da variante QI_444
             "UNIDADE DE RECEBIVEL": "29",
+            "UNIDADES DE RECEBIVEL": "29",
+            "UNIDADE DE RECEBIVEIS": "29",
+            "UNIDADES DE RECEBIVEIS": "29",
+            "UR": "29",
             "NOTA COMERCIAL PRE": "79",
             "NOTA COMERCIAL POS": "82",
             "CCE POS": "85",

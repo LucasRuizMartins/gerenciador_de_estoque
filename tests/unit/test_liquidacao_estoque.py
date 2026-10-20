@@ -27,6 +27,9 @@ def _estoque():
 def test_mapeamento_tipo():
     assert liq.mapear_tipo_recebivel("Duplicata Mercantil") == ("01", True)
     assert liq.mapear_tipo_recebivel("Cheque pré") == ("51", True)
+    assert liq.mapear_tipo_recebivel("Unidades de recebivel") == ("29", True)
+    assert liq.mapear_tipo_recebivel("Unidade de Recebível") == ("29", True)
+    assert liq.mapear_tipo_recebivel("UR") == ("29", True)
     assert liq.mapear_tipo_recebivel("xyz") == ("01", False)
 
 

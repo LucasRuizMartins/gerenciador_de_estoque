@@ -58,6 +58,7 @@ MAP_ESPECIE_TITULO = {
     13: "Precatórios",
     14: "Duplicata de Serviço Físico",
     21: "Renegociação da Dívida",
+    29: "Unidade de Recebível",
     41: "CCB Digital",
     50: "NF - Nota Fiscal",
     51: "Cheque",
